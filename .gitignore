@@ -1,0 +1,52 @@
+# ===== OS / Editor =====
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+.vscode/
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Eclipse / STS
+.classpath
+.project
+.settings/
+
+# ===== Java / Maven / Spring Boot =====
+# Build output
+**/target/
+
+# Logs
+**/logs/
+*.log
+
+# JVM crash logs
+hs_err_pid*
+replay_pid*
+
+# ===== knowledge_back runtime data =====
+# H2 local database files (backend writes to ./data by default)
+/data/
+*.mv.db
+*.trace.db
+
+# Some setups may write H2 DB under the module directory
+knowledge_back/data/
+
+# Upload storage / temp
+knowledge_back/storage/
+
+# IntelliJ build output
+**/out/
+
+# Compiled bytecode
+*.class
+
+# Generated API specs (can be regenerated from /v3/api-docs)
+knowledge_back/docs/openapi.json
+knowledge_back/docs/openapi.yaml
+
+# If you also want to ignore packaged jars (optional)
+# knowledge_back/target/*.jar
