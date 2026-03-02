@@ -11,9 +11,10 @@ interface Source {
 
 interface SourceBarProps {
   sources: Source[];
+  onOpenPreview: (docTitle: string, citation: string) => void;
 }
 
-const SourceBar: React.FC<SourceBarProps> = ({ sources }) => {
+const SourceBar: React.FC<SourceBarProps> = ({ sources, onOpenPreview }) => {
   return (
     <div className="w-full overflow-x-auto pb-4 scrollbar-hide">
       <div className="text-sm text-slate-500 font-medium mb-2 pl-1 sticky left-0 z-10 flex items-center gap-2">
@@ -27,6 +28,7 @@ const SourceBar: React.FC<SourceBarProps> = ({ sources }) => {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: index * 0.1 }}
+            onClick={() => onOpenPreview(source.title, source.summary)}
             className="w-64 glass-card p-4 hover:shadow-xl hover:scale-105 transition-all cursor-pointer group flex flex-col justify-between h-40 border-l-4 border-l-blue-400/50 bg-white/60"
           >
             <div>

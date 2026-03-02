@@ -31,16 +31,28 @@ public class SystemController {
         )
     public SystemStatusResponse status() {
         String es = "unknown";
+        Integer indexCount = null;
+        Integer nodeCount = null;
+        Long latencyMs = null;
         Long qCount = null;
         String reranker = "unknown";
 
         try {
+            var start = System.nanoTime();
             var esJson = elasticsearchClient.clusterHealth();
+            latencyMs = (System.nanoTime() - start) / 1_000_000;
             if (esJson != null && esJson.get("status") != null) {
                 es = esJson.get("status").asText();
             }
+            if (esJson != null && esJson.get("number_of_nodes") != null && esJson.get("number_of_nodes").isNumber()) {
+                nodeCount = esJson.get("number_of_nodes").asInt();
+            }
+            indexCount = elasticsearchClient.indexCount();
         } catch (Exception ignore) {
             es = "down";
+            indexCount = null;
+            nodeCount = null;
+            latencyMs = null;
         }
 
         try {
@@ -69,7 +81,7 @@ public class SystemController {
             reranker = "down";
         }
 
-        return new SystemStatusResponse(es, qCount, reranker);
+        return new SystemStatusResponse(es, indexCount, nodeCount, latencyMs, qCount, reranker);
     }
 
     @GetMapping("/health")

@@ -72,6 +72,18 @@ public class ElasticsearchClient {
                 .block(Duration.ofSeconds(5));
     }
 
+    public Integer indexCount() {
+        var indices = webClient.get()
+                .uri("/_cat/indices?format=json")
+                .retrieve()
+                .bodyToMono(JsonNode.class)
+                .block(Duration.ofSeconds(5));
+        if (indices != null && indices.isArray()) {
+            return indices.size();
+        }
+        return null;
+    }
+
     public boolean indexExists() {
         return Boolean.TRUE.equals(webClient.get()
                 .uri("/{index}", props.index())

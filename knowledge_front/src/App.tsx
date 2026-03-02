@@ -3,11 +3,16 @@ import Navbar from './components/layout/Navbar';
 import HeroInput from './components/search/HeroInput';
 import AIPanel from './components/results/AIPanel';
 import SourceBar from './components/results/SourceBar';
+import Documents from './components/documents/Documents';
+import AdminDashboard from './components/admin/AdminDashboard';
+import FilePreviewDrawer from './components/layout/FilePreviewDrawer';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, FolderUp } from 'lucide-react';
 
 function App() {
-  const [view, setView] = useState<'home' | 'result' | 'upload'>('home');
+  const [view, setView] = useState<'home' | 'result' | 'documents' | 'admin'>('home');
+  const [isAdmin, setIsAdmin] = useState(true); // Role State
+  const [previewDoc, setPreviewDoc] = useState<{title: string, citation: string} | null>(null);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [answer, setAnswer] = useState('');
@@ -69,7 +74,16 @@ function App() {
       </div>
 
       {/* L2: Layout Shell */}
-      <Navbar onNavigate={setView} activeView={view} />
+      <Navbar 
+        onNavigate={setView} 
+        activeView={view} 
+        isAdmin={isAdmin}
+        onToggleRole={() => {
+          setIsAdmin(!isAdmin);
+          // If switching to normal user while in admin view, redirect home
+          if (view === 'admin' && isAdmin) setView('home'); 
+        }}
+      />
 
       <motion.main 
         className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 min-h-[calc(100vh-64px)] flex flex-col"
@@ -99,7 +113,7 @@ function App() {
                 </p>
               </div>
 
-              <HeroInput onSearch={handleSearch} className="scale-110" />
+              <HeroInput onSearch={handleSearch} />
             </motion.div>
           )}
 
@@ -110,7 +124,7 @@ function App() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.3 }}
-              className="w-full max-w-5xl mx-auto space-y-6"
+              className="w-full max-w-5xl mx-auto space-y-6 pb-20"
             >
               {/* Compact Search Bar Header */}
               <div className="flex items-center gap-4 mb-4">
@@ -133,36 +147,51 @@ function App() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.2 }}
                   >
-                    <SourceBar sources={sources} />
+                    <SourceBar 
+                      sources={sources} 
+                      onOpenPreview={(title, citation) => setPreviewDoc({ title, citation })}
+                    />
                   </motion.div>
                 )}
               </div>
             </motion.div>
           )}
 
-          {view === 'upload' && (
+          {view === 'documents' && (
              <motion.div 
-               key="upload"
+               key="documents"
+               initial={{ opacity: 0, x: 20 }}
+               animate={{ opacity: 1, x: 0 }}
+               exit={{ opacity: 0, x: -20 }}
+               transition={{ duration: 0.3 }}
+               className="w-full"
+             >
+               <Documents onOpenPreview={(title) => setPreviewDoc({ title, citation: '' })} />
+             </motion.div>
+          )}
+
+          {view === 'admin' && (
+             <motion.div 
+               key="admin"
                initial={{ opacity: 0, scale: 0.95 }}
                animate={{ opacity: 1, scale: 1 }}
                exit={{ opacity: 0, scale: 0.95 }}
                transition={{ duration: 0.3 }}
-               className="flex flex-col items-center justify-center flex-grow py-20"
+               className="w-full"
              >
-               <div className="glass-card p-12 text-center max-w-md w-full border-blue-100 ring-4 ring-white/50">
-                 <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-6 text-blue-500 shadow-inner">
-                   <FolderUp size={40} />
-                 </div>
-                 <h2 className="text-2xl font-bold text-slate-800 mb-2">知识库管理</h2>
-                 <p className="text-slate-500 mb-8">拖拽文件到此处，或点击上传文档进行索引构建。</p>
-                 <button className="w-full px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50 hover:scale-[1.02] transition-all font-medium">
-                   选择文件上传
-                 </button>
-               </div>
+               <AdminDashboard />
              </motion.div>
           )}
         </AnimatePresence>
       </motion.main>
+
+      {/* Global File Preview Drawer */}
+      <FilePreviewDrawer 
+        isOpen={!!previewDoc} 
+        onClose={() => setPreviewDoc(null)}
+        fileTitle={previewDoc?.title || ''}
+        citationText={previewDoc?.citation}
+      />
     </div>
   );
 }
