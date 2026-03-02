@@ -7,20 +7,29 @@ spring:
   jackson:
     property-naming-strategy: LOWER_CAMEL_CASE
   datasource:
-    url: jdbc:h2:file:./data/knowledge_back;MODE=MySQL;DB_CLOSE_DELAY=-1
-    driverClassName: org.h2.Driver
-    username: sa
-    password:
+    # MySQL 配置
+    url: jdbc:mysql://localhost:3306/knowledge_base?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
+    driverClassName: com.mysql.cj.jdbc.Driver
+    username: root
+    password: 123456
+  sql:
+    init:
+      mode: never
+      # 每次启动都运行schema.sql (注意:如果你想保留数据, 请改为 never 或使用 Flyway)
+      # 由于schema.sql中有 DROP TABLE IF EXISTS, 每次启动都会清空数据重建表结构
+      # 开发阶段方便调试, 生产环境请务必修改
+      schema-locations: classpath:schema.sql
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: none # 使用schema.sql管理表结构, 禁用Hibernate自动更新
     properties:
       hibernate:
         format_sql: true
-  h2:
-    console:
-      enabled: true
-      path: /h2
+        dialect: org.hibernate.dialect.MySQLDialect
+  # h2:
+  #   console:
+  #     enabled: true
+  #     path: /h2
 
 springdoc:
   swagger-ui:
