@@ -26,6 +26,8 @@ Desktop.ini
 hs_err_pid*
 replay_pid*
 
+.env
+
 # ===== knowledge_back runtime data =====
 # H2 local database files (backend writes to ./data by default)
 /data/

@@ -7,11 +7,12 @@ interface Source {
   title: string;
   summary: string;
   score: number;
+  docId?: string;
 }
 
 interface SourceBarProps {
   sources: Source[];
-  onOpenPreview: (docTitle: string, citation: string) => void;
+  onOpenPreview: (docId: string | undefined, docTitle: string, citation: string) => void;
 }
 
 const SourceBar: React.FC<SourceBarProps> = ({ sources, onOpenPreview }) => {
@@ -28,7 +29,7 @@ const SourceBar: React.FC<SourceBarProps> = ({ sources, onOpenPreview }) => {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: index * 0.1 }}
-            onClick={() => onOpenPreview(source.title, source.summary)}
+            onClick={() => onOpenPreview(source.docId, source.title, source.summary)}
             className="w-64 glass-card p-4 hover:shadow-xl hover:scale-105 transition-all cursor-pointer group flex flex-col justify-between h-40 border-l-4 border-l-blue-400/50 bg-white/60"
           >
             <div>

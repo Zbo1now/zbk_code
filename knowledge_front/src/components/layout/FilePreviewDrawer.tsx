@@ -1,17 +1,91 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Search, ChevronLeft, ChevronRight, FileText, Download, Share2, AlertCircle } from 'lucide-react';
+import { X, FileText, Download, Share2, AlertCircle } from 'lucide-react';
 
 interface FilePreviewDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   fileTitle: string;
   citationText?: string; // The text that was cited by AI
+  docId?: string;
 }
 
-const FilePreviewDrawer: React.FC<FilePreviewDrawerProps> = ({ isOpen, onClose, fileTitle, citationText }) => {
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(12);
+const FilePreviewDrawer: React.FC<FilePreviewDrawerProps> = ({ isOpen, onClose, fileTitle, citationText, docId }) => {
+  const [content, setContent] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [previewMeta, setPreviewMeta] = useState<{
+    fileType?: string | null;
+    status?: string | null;
+    fileSize?: number | null;
+    createdAt?: string | null;
+    hidden?: boolean | null;
+    checksum?: string | null;
+    displayName?: string | null;
+    description?: string | null;
+    originalFilename?: string | null;
+  } | null>(null);
+
+  const statusLabel = (value?: string | null) => {
+    switch (value) {
+      case 'PENDING_REVIEW':
+        return '待审核';
+      case 'APPROVED':
+        return '审核通过';
+      case 'PARSING':
+        return '解析中';
+      case 'INDEXED':
+        return '已索引';
+      case 'FAILED':
+        return '解析失败';
+      case 'REJECTED':
+        return '已拒绝';
+      case 'UPLOADED':
+        return '已上传';
+      default:
+        return value || '未知';
+    }
+  };
+
+  useEffect(() => {
+    if (!isOpen || !docId) return;
+    setLoading(true);
+    setError(null);
+    fetch(`/api/v1/knowledge/documents/${docId}/preview`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error('预览加载失败');
+        return res.json();
+      })
+      .then((data) => {
+        setContent(data?.content || '');
+        setPreviewMeta({
+          fileType: data?.fileType || null,
+          status: data?.status || null,
+          fileSize: typeof data?.fileSize === 'number' ? data.fileSize : null,
+          createdAt: data?.createdAt || null,
+          hidden: typeof data?.hidden === 'boolean' ? data.hidden : null,
+          checksum: data?.checksum || null,
+          displayName: data?.displayName || null,
+          description: data?.description || null,
+          originalFilename: data?.originalFilename || null,
+        });
+        if (data?.errorMessage) {
+          setError(data.errorMessage);
+        }
+      })
+      .catch((err) => {
+        setError(err.message || '预览加载失败');
+      })
+      .finally(() => setLoading(false));
+  }, [isOpen, docId]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setContent('');
+      setError(null);
+      setPreviewMeta(null);
+    }
+  }, [isOpen]);
 
   return (
     <AnimatePresence>
@@ -43,15 +117,21 @@ const FilePreviewDrawer: React.FC<FilePreviewDrawerProps> = ({ isOpen, onClose, 
                 <div>
                   <h2 className="font-bold text-slate-800 line-clamp-1">{fileTitle}</h2>
                   <p className="text-xs text-slate-500 flex items-center gap-2">
-                    <span>版本: v2.4</span>
+                    {previewMeta?.fileType && <span>格式: {previewMeta.fileType}</span>}
                     <span className="w-1 h-1 rounded-full bg-slate-300" />
-                    <span>更新时间: 2024-02-10</span>
+                    <span>状态: {statusLabel(previewMeta?.status)}</span>
                   </p>
                 </div>
               </div>
               
               <div className="flex items-center gap-2">
-                <button className="p-2 hover:bg-slate-100 rounded-full text-slate-500 transition-colors" title="下载">
+                <button
+                  className="p-2 hover:bg-slate-100 rounded-full text-slate-500 transition-colors"
+                  title="下载"
+                  onClick={() => {
+                    if (docId) window.open(`/api/v1/knowledge/documents/${docId}/download`, '_blank');
+                  }}
+                >
                   <Download size={18} />
                 </button>
                 <button className="p-2 hover:bg-slate-100 rounded-full text-slate-500 transition-colors" title="分享">
@@ -67,87 +147,94 @@ const FilePreviewDrawer: React.FC<FilePreviewDrawerProps> = ({ isOpen, onClose, 
             {/* Main Content Area (Split View) */}
             <div className="flex-1 flex overflow-hidden">
               
-              {/* Left: PDF Viewer (Mock) */}
-              <div className="flex-1 bg-slate-100 overflow-y-auto p-8 flex justify-center">
-                <div className="bg-white shadow-lg w-full max-w-3xl min-h-[1000px] rounded-sm relative p-12 text-slate-800 font-serif leading-relaxed">
-                  {/* Mock Page Content */}
-                  <h1 className="text-3xl font-bold mb-8 text-center border-b pb-4">{fileTitle.replace('.pdf', '')}</h1>
-                  <p className="mb-4 text-justify">
-                    1. 目的<br/>
-                    本规程旨在规范压铸车间的安全操作，预防事故发生，保障员工的人身安全和设备的正常运行。
-                  </p>
-                  <p className="mb-4 text-justify">
-                    2. 适用范围<br/>
-                    本规程适用于所有进入压铸车间工作的人员，包括操作工、维修工、管理人员及外来访客。
-                  </p>
-                  
-                  {/* Highlighted Section (Simulating AI Citation) */}
-                  <div className="relative my-8 group">
-                    <div className="absolute -left-6 top-0 bottom-0 w-1 bg-yellow-400 rounded-full shadow-[0_0_10px_rgba(250,204,21,0.5)] animate-pulse" />
-                    <mark className="bg-yellow-100 text-slate-900 px-1 py-0.5 rounded">
-                      3.1 设备启动前检查<br/>
-                      开机前必须检查油温、油压是否在正常范围内（油温35-55℃，系统压力14-16MPa）。检查安全门限位开关是否灵敏可靠，急停按钮是否复位。
-                    </mark>
-                    <div className="absolute -right-32 top-1/2 -translate-y-1/2 bg-slate-800 text-white text-xs px-3 py-1.5 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity arrow-left">
-                        AI 引用来源于此
+              {/* Left: Reader */}
+              <div className="flex-1 bg-white overflow-y-auto border-r border-slate-100">
+                <div className="mx-auto w-full max-w-3xl px-5 sm:px-8 lg:px-10 py-8">
+                  <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 sm:p-8 lg:p-10 text-slate-800 leading-relaxed">
+                    <h1 className="text-xl sm:text-2xl font-bold mb-6 text-center border-b pb-3">{previewMeta?.displayName || fileTitle}</h1>
+                  {loading && (
+                    <div className="text-sm text-slate-400">正在加载文档内容...</div>
+                  )}
+                  {error && (
+                    <div className="text-sm text-red-500">预览失败: {error}</div>
+                  )}
+                  {!loading && !error && (
+                    <pre className="whitespace-pre-wrap text-sm leading-7 text-slate-700 font-sans">
+                      {content || '暂无可预览内容'}
+                    </pre>
+                  )}
+                  {citationText && (
+                    <div className="mt-6 p-4 bg-yellow-50 border border-yellow-100 rounded-lg text-sm text-slate-700">
+                      <div className="font-medium text-yellow-700 mb-2">AI 引用片段</div>
+                      <div className="whitespace-pre-wrap">{citationText}</div>
                     </div>
+                  )}
                   </div>
-
-                  <p className="mb-4 text-justify">
-                    3.2 运行中注意事项<br/>
-                    设备运行时，严禁将头、手伸入模具分型面区域。取件时必须使用专用夹具或机器人，禁止徒手取件。如遇卡模，必须停机并挂牌“维修中”后方可处理。
-                  </p>
-                  
-                  {/* Lorem Ipusm simulation for length */}
-                  {Array.from({ length: 10 }).map((_, i) => (
-                    <p key={i} className="mb-4 text-slate-300 blur-[1px]">
-                      Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. 
-                    </p>
-                  ))}
                 </div>
               </div>
 
-              {/* Right: Metadata & Navigation */}
-              <div className="w-80 bg-white border-l border-slate-100 flex flex-col hidden lg:flex">
+                {/* Right: Real Metadata */}
+                <div className="w-80 bg-white border-l border-slate-100 flex flex-col hidden lg:flex">
                 <div className="p-6 border-b border-slate-100">
-                    <h3 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
-                        <AlertCircle size={16} className="text-blue-500"/> 
-                        相关故障案例
-                    </h3>
-                    <div className="space-y-3">
-                        <div className="p-3 bg-slate-50 rounded-lg border border-slate-100 text-xs">
-                            <div className="font-medium text-slate-700 mb-1">案例 #2023-019</div>
-                            <p className="text-slate-500">操作工未确认急停复位导致模具撞损。</p>
-                        </div>
-                        <div className="p-3 bg-slate-50 rounded-lg border border-slate-100 text-xs">
-                            <div className="font-medium text-slate-700 mb-1">案例 #2022-104</div>
-                            <p className="text-slate-500">油温过高导致密封件失效漏油。</p>
-                        </div>
+                  <h3 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
+                    <AlertCircle size={16} className="text-blue-500"/> 
+                    文档概览
+                  </h3>
+                  {previewMeta?.description ? (
+                    <div className="text-xs text-slate-600 leading-6 bg-slate-50 border border-slate-100 rounded-lg p-3">
+                    {previewMeta.description}
                     </div>
+                  ) : (
+                    <div className="text-xs text-slate-400">暂无文档备注</div>
+                  )}
                 </div>
 
                 <div className="p-6">
-                    <h3 className="text-sm font-bold text-slate-900 mb-3">元数据</h3>
-                    <div className="space-y-4 text-xs">
-                        <div>
-                            <span className="block text-slate-400 mb-1">所属部门</span>
-                            <span className="font-medium">生产部 / 压铸一车间</span>
-                        </div>
-                        <div>
-                            <span className="block text-slate-400 mb-1">文档状态</span>
-                            <span className="px-2 py-0.5 bg-green-100 text-green-600 rounded-full">现行有效</span>
-                        </div>
-                         <div>
-                            <span className="block text-slate-400 mb-1">标签</span>
-                            <div className="flex flex-wrap gap-1">
-                                <span className="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded border">安全</span>
-                                <span className="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded border">操作规程</span>
-                            </div>
-                        </div>
+                  <h3 className="text-sm font-bold text-slate-900 mb-3">文档信息</h3>
+                  <div className="space-y-4 text-xs">
+                    <div>
+                      <span className="block text-slate-400 mb-1">文档ID</span>
+                      <span className="font-medium text-slate-700 break-all">{docId || '-'}</span>
                     </div>
+                    <div>
+                      <span className="block text-slate-400 mb-1">原始文件名</span>
+                      <span className="font-medium text-slate-700 break-all">{previewMeta?.originalFilename || fileTitle}</span>
+                    </div>
+                    <div>
+                      <span className="block text-slate-400 mb-1">文件大小</span>
+                      <span className="font-medium text-slate-700">
+                        {typeof previewMeta?.fileSize === 'number'
+                        ? previewMeta.fileSize < 1024 * 1024
+                          ? `${(previewMeta.fileSize / 1024).toFixed(1)} KB`
+                          : `${(previewMeta.fileSize / (1024 * 1024)).toFixed(1)} MB`
+                        : '未知'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="block text-slate-400 mb-1">上传时间</span>
+                      <span className="font-medium text-slate-700">
+                        {previewMeta?.createdAt ? new Date(previewMeta.createdAt).toLocaleString() : '未知'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="block text-slate-400 mb-1">状态</span>
+                      <span className="inline-flex w-fit px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                        {statusLabel(previewMeta?.status)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="block text-slate-400 mb-1">可见性</span>
+                      <span className={`inline-flex w-fit px-2 py-0.5 rounded-full ${previewMeta?.hidden ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                        {previewMeta?.hidden ? '已隐藏' : '可见'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="block text-slate-400 mb-1">校验和</span>
+                      <span className="font-medium text-slate-700 break-all">{previewMeta?.checksum || '未知'}</span>
+                    </div>
+                  </div>
                 </div>
-              
-              </div>
+                </div>
 
             </div>
           </motion.div>

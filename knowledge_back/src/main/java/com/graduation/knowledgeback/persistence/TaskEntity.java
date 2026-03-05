@@ -18,6 +18,9 @@ public class TaskEntity {
     @Column(length = 64)
     private String taskId;
 
+    @Column(length = 64)
+    private String targetId;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private TaskType type;
@@ -81,6 +84,14 @@ public class TaskEntity {
 
     public Instant getFinishedAt() {
         return finishedAt;
+    }
+
+    public String getTargetId() {
+        return targetId;
+    }
+
+    public void setTargetId(String targetId) {
+        this.targetId = targetId;
     }
 
     public void start() {

@@ -12,38 +12,69 @@ import { ArrowLeft, FolderUp } from 'lucide-react';
 function App() {
   const [view, setView] = useState<'home' | 'result' | 'documents' | 'admin'>('home');
   const [isAdmin, setIsAdmin] = useState(true); // Role State
-  const [previewDoc, setPreviewDoc] = useState<{title: string, citation: string} | null>(null);
+  const [previewDoc, setPreviewDoc] = useState<{title: string, citation: string, docId?: string} | null>(null);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [answer, setAnswer] = useState('');
   const [complete, setComplete] = useState(false);
+  const [sources, setSources] = useState<Array<{ id: string; title: string; summary: string; score: number; docId?: string }>>([]);
+  const [docTitleMap, setDocTitleMap] = useState<Record<string, string>>({});
 
-  // Mock Sources
-  const sources = [
-    { id: '1', title: '10bar真空高压气淬炉在压铸模具热处理中的应用', summary: '...', score: 0.92 },
-    { id: '2', title: '3D打印省去了砂型铸造过程中的繁琐工作', summary: '...', score: 0.85 },
-    { id: '3', title: '大型铜合金螺旋桨铸造工艺介绍', summary: '...', score: 0.78 },
-    { id: '4', title: '铝合金压铸件的表面处理方法', summary: '...', score: 0.75 },
-    { id: '5', title: '精密铸造用无尘包埋料的制备及应用', summary: '...', score: 0.60 },
-  ];
+  const ensureDocTitleMap = async () => {
+    if (Object.keys(docTitleMap).length > 0) return docTitleMap;
+    try {
+      const res = await fetch('/api/v1/knowledge/documents?page=1&pageSize=100&includeHidden=true');
+      if (!res.ok) return {};
+      const data = await res.json();
+      const map: Record<string, string> = {};
+      (data.items || []).forEach((item: any) => {
+        if (item.docId) {
+          map[item.docId] = item.displayName || item.originalFilename || item.docId;
+        }
+      });
+      setDocTitleMap(map);
+      return map;
+    } catch {
+      return {};
+    }
+  };
 
-  const handleSearch = (q: string, useRerank: boolean) => {
+  const handleSearch = async (q: string, useRerank: boolean) => {
     setQuery(q);
     setView('result');
     setLoading(true);
     setAnswer('');
     setComplete(false);
+    setSources([]);
+    try {
+      const res = await fetch('/api/v1/qa/answer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: q, topK: 6, useRerank })
+      });
+      if (!res.ok) throw new Error('检索失败');
+      const data = await res.json();
+      const results = data?.sources || [];
+      const titleMap = await ensureDocTitleMap();
 
-    // Simulate API delay and streaming
-    setTimeout(() => {
-      setLoading(false);
-      const modeText = useRerank ? '（已启用AI精排优化）' : '（基础检索模式）';
-      setAnswer(`针对 **${q}** 的问题 ${modeText}，根据现有文档库分析如下：\n\n` +  
-      '压铸模具的热处理是保证模具寿命和铸件质量的关键环节。根据《10bar真空高压气淬炉在压铸模具热处理中的应用》[1]，采用高压气淬技术可以有效控制模具变形，提高表面硬度。\n\n' +
-      '此外，3D打印技术在铸造领域的应用也日益广泛。它不仅缩短了加工周期，还减少了砂型铸造的繁琐工序[2]。对于铝合金压铸件，表面处理如氧化、喷涂等也是提升耐腐蚀性的重要手段[4]。\n\n' +
-      '综上所述，结合先进的热处理设备与新型制造工艺（如3D打印），是提升铸造产业竞争力的重要方向。');
+      const builtSources = results.map((item: any, idx: number) => ({
+        id: item.chunkIds?.[0] || `${item.docId || 'doc'}_${idx}`,
+        docId: item.docId,
+        title: titleMap[item.docId] || item.source || item.docId || '未知文档',
+        summary: item.content || '',
+        score: typeof item.score === 'number' ? item.score : 0
+      }));
+      setSources(builtSources);
+
+      const answerText = data?.answer || '未生成有效答案。';
+      setAnswer(answerText);
       setComplete(true);
-    }, 1500);
+    } catch (e) {
+      setAnswer('检索失败，请稍后重试。');
+      setComplete(true);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -149,7 +180,7 @@ function App() {
                   >
                     <SourceBar 
                       sources={sources} 
-                      onOpenPreview={(title, citation) => setPreviewDoc({ title, citation })}
+                      onOpenPreview={(docId, title, citation) => setPreviewDoc({ docId, title, citation })}
                     />
                   </motion.div>
                 )}
@@ -166,7 +197,7 @@ function App() {
                transition={{ duration: 0.3 }}
                className="w-full"
              >
-               <Documents onOpenPreview={(title) => setPreviewDoc({ title, citation: '' })} />
+               <Documents onOpenPreview={(docId, title) => setPreviewDoc({ docId, title, citation: '' })} />
              </motion.div>
           )}
 
@@ -191,6 +222,7 @@ function App() {
         onClose={() => setPreviewDoc(null)}
         fileTitle={previewDoc?.title || ''}
         citationText={previewDoc?.citation}
+        docId={previewDoc?.docId}
       />
     </div>
   );

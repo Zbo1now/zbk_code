@@ -7,7 +7,8 @@ public record AppProperties(
         Elasticsearch elasticsearch,
         Qdrant qdrant,
         ModelService modelService,
-        Indexing indexing
+    Indexing indexing,
+    Llm llm
 ) {
     public record Elasticsearch(String baseUrl, String index) {
     }
@@ -19,5 +20,8 @@ public record AppProperties(
     }
 
     public record Indexing(String sourceJsonlPath, Integer embedBatchSize) {
+    }
+
+    public record Llm(String baseUrl, String apiKey, String model) {
     }
 }

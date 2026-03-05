@@ -27,9 +27,14 @@ const HeroInput: React.FC<HeroInputProps> = ({ onSearch, className }) => {
       className={`relative w-full max-w-3xl mx-auto ${className}`}
     >
       {/* Function Toggles - Industrial Label Style */}
-      <div className="flex justify-end mb-2 mr-2 gap-3">
+      <div className="relative z-10 flex justify-end mb-2 mr-2 gap-3">
         <button 
-          onClick={() => setUseRerank(!useRerank)}
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            setUseRerank((prev) => !prev);
+          }}
+          aria-pressed={useRerank}
           className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono border transition-all ${
             useRerank 
               ? 'bg-blue-600/10 border-blue-500/30 text-blue-600' 
@@ -42,11 +47,11 @@ const HeroInput: React.FC<HeroInputProps> = ({ onSearch, className }) => {
       </div>
 
       {/* Glow Effect */}
-      <div className={`absolute -inset-1 bg-gradient-to-r from-blue-300 via-purple-300 to-indigo-300 rounded-2xl blur-xl opacity-20 transition-opacity duration-500 ${isFocused ? 'opacity-50 scale-105' : ''}`}></div>
+      <div className={`pointer-events-none absolute -inset-1 bg-gradient-to-r from-blue-300 via-purple-300 to-indigo-300 rounded-2xl blur-xl opacity-20 transition-opacity duration-500 ${isFocused ? 'opacity-50 scale-105' : ''}`}></div>
 
       {/* Input Container */}
       <div 
-        className={`relative flex items-center bg-white/80 backdrop-blur-xl border border-blue-100/50 shadow-2xl rounded-2xl transition-all duration-300 overflow-visible ${isFocused ? 'ring-2 ring-blue-500/20' : ''}`}
+        className={`relative z-10 flex items-center bg-white/80 backdrop-blur-xl border border-blue-100/50 shadow-2xl rounded-2xl transition-all duration-300 overflow-visible ${isFocused ? 'ring-2 ring-blue-500/20' : ''}`}
       >
         {/* Animated Icon */}
         <div className="pl-5 text-slate-400">

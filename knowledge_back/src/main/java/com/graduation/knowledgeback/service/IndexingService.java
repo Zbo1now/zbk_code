@@ -52,6 +52,42 @@ public class IndexingService {
         return indexJsonl(jsonlPath, embedBatchSize);
     }
 
+    public List<DocumentMeta> indexDocumentChunks(List<JsonNode> chunks, int embedBatchSize) throws Exception {
+        var docMetas = new LinkedHashMap<String, DocumentMeta>();
+        var texts = new ArrayList<String>();
+        var payloads = new ArrayList<JsonNode>();
+        
+        for (JsonNode chunk : chunks) {
+            String content = chunk.get("content").asText();
+            texts.add(content);
+            payloads.add(chunk);
+            
+            // Extract meta (similar to indexJsonl)
+            JsonNode docIdNode = chunk.get("doc_id");
+            if (docIdNode != null) {
+                String docId = docIdNode.asText();
+                docMetas.computeIfAbsent(docId, id -> new DocumentMeta(
+                    id, 
+                    textOrNull(chunk.get("title")),
+                    textOrNull(chunk.get("source")),
+                    textOrNull(chunk.get("file_type"))
+                ));
+            }
+            
+            if (texts.size() >= embedBatchSize) {
+                flushBatch(texts, payloads);
+                texts.clear();
+                payloads.clear();
+            }
+        }
+        
+        if (!texts.isEmpty()) {
+            flushBatch(texts, payloads);
+        }
+        
+        return new ArrayList<>(docMetas.values());
+    }
+
     public List<DocumentMeta> indexJsonl(Path jsonlPath, int embedBatchSize) throws Exception {
         if (!Files.exists(jsonlPath)) {
             throw new IllegalArgumentException("JSONL not found: " + jsonlPath);

@@ -2,6 +2,8 @@ server:
   port: 8080
 
 spring:
+  config:
+    import: optional:file:.env[.properties]
   application:
     name: knowledge-back
   jackson:
@@ -48,3 +50,7 @@ app:
     # 默认复用你现有的 processed 数据（可改成别的 JSONL）
     sourceJsonlPath: ../knowledge_rag/data/processed/virtual_articles.jsonl
     embedBatchSize: 64
+  llm:
+    baseUrl: https://api.siliconflow.cn/v1
+    apiKey: ${DEEPSEEK_API_KEY:}
+    model: deepseek-ai/DeepSeek-V3
