@@ -21,7 +21,7 @@ function App() {
       return 'home';
     }
   });
-  const [isAdmin, setIsAdmin] = useState(true); // Role State
+  const [isAdmin, setIsAdmin] = useState(true); // 角色状态
   const [previewDoc, setPreviewDoc] = useState<{title: string, citation: string, docId?: string} | null>(null);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
@@ -40,7 +40,7 @@ function App() {
     try {
       window.localStorage.setItem('czj_view', view);
     } catch {
-      // ignore storage errors
+      // 忽略存储错误
     }
   }, [view]);
 
@@ -107,7 +107,7 @@ function App() {
       setAnswer(answerText);
       setComplete(true);
     } catch (e) {
-      setAnswer('检索失败，请稍后重试。');
+      setAnswer('请求异常（可能是网络问题或服务不可用），请稍后重试。');
       setComplete(true);
     } finally {
       setLoading(false);

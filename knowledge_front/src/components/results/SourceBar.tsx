@@ -68,7 +68,7 @@ const SourceBar: React.FC<SourceBarProps> = ({ sources, onOpenPreview }) => {
           </motion.div>
         ))}
         
-        {/* View All Card */}
+        {/* 查看全部卡片 */}
         <div className="w-32 flex items-center justify-center glass-card border-dashed border-2 border-slate-300 hover:border-blue-400 cursor-pointer text-slate-400 hover:text-blue-500 transition-all group">
           <div className="text-center">
             <span className="block text-sm font-medium group-hover:scale-110 transition-transform">查看全部</span>

@@ -94,20 +94,20 @@ public class SearchService {
             timing.put("rerankMs", rerankMs);
         }
 
-        // --- Logging ---
+        // --- 开始记录日志 ---
         try {
-            // Model Latency = Vector Search (approx embedded time included implicitly or explicitly) + Rerank
-            // For rigorous timing, vectorMs includes embedding + qdrant search.
+            // 模型延迟 = 向量检索（通常隐式或显式包含嵌入时间） + 重排
+            // 为了精确计时，vectorMs 包括嵌入 + qdrant 检索。
             long modelTotalMs = vectorMs + rerankMs;
             
-            // ES Latency = Keyword search
+            // ES 延迟 = 关键词检索
             long esTotalMs = keywordMs;
 
             SearchLogEntity log = new SearchLogEntity(
                 searchId,
-                null, // user_id is unknown in this context, can be passed if needed
+                null, // user_id 在此上下文中未知，如果需要可以传递
                 req.query(),
-                "HYBRID", // Defaulting to HYBRID as code does both
+                "HYBRID", // 默认为 HYBRID，因为代码同时执行了两者
                 Boolean.TRUE.equals(req.useRerank()),
                 results.size(),
                 (int) totalMs,
@@ -119,14 +119,14 @@ public class SearchService {
         } catch (Exception e) {
             System.err.println("Failed to save search log: " + e.getMessage());
         }
-        // --- End Logging ---
+        // --- 结束记录日志 ---
         return new PipelineSearchResponse(searchId, req.query(), totalMs, timing, results);
     }
 
     private Map<String, String> normalizeFilters(Map<String, String> filters) {
         if (filters == null || filters.isEmpty()) return Map.of();
 
-        // Map request keys (camelCase) to payload field keys (snake_case)
+        // 将请求的 key (camelCase) 映射到 payload 字段的 key (snake_case)
         return filters.entrySet().stream()
                 .filter(e -> e.getKey() != null && e.getValue() != null)
                 .filter(e -> !e.getKey().isBlank() && !e.getValue().isBlank())
@@ -138,10 +138,10 @@ public class SearchService {
     }
 
     private String mapFilterKey(String key) {
-        // Known aliases from API design
+        // API 设计中的已知别名
         if ("docType".equals(key)) return "file_type";
         if ("machineType".equals(key)) return "machine_type";
-        // Fallback: camelCase -> snake_case
+        // 回退策略：camelCase -> snake_case
         return camelToSnake(key);
     }
 

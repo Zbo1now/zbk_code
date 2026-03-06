@@ -11,7 +11,7 @@ interface NavbarProps {
 const Navbar: React.FC<NavbarProps> = ({ onNavigate, activeView, isAdmin, onToggleRole }) => {
   return (
     <nav className="fixed top-0 left-0 right-0 h-16 glass-nav flex items-center justify-between px-6 z-50">
-      {/* Logo Area */}
+      {/* Logo 区域 */}
       <div 
         className="flex items-center gap-2 cursor-pointer group" 
         onClick={() => onNavigate('home')}
@@ -27,7 +27,7 @@ const Navbar: React.FC<NavbarProps> = ({ onNavigate, activeView, isAdmin, onTogg
         </div>
       </div>
 
-      {/* Tabs */}
+      {/* 标签页 */}
       <div className="flex bg-slate-100/50 p-1 rounded-full border border-white/50 backdrop-blur-sm gap-1">
         <button
           onClick={() => onNavigate('home')}
@@ -68,7 +68,7 @@ const Navbar: React.FC<NavbarProps> = ({ onNavigate, activeView, isAdmin, onTogg
         )}
       </div>
 
-      {/* User Area */}
+      {/* 用户区域 */}
       <div 
         className="flex items-center gap-4 cursor-pointer group"
         onClick={onToggleRole}

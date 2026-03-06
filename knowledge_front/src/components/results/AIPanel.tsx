@@ -13,17 +13,17 @@ interface AIPanelProps {
 const AIPanel: React.FC<AIPanelProps> = ({ answer, loading, complete, sources, onCitationClick }) => {
   const [displayedText, setDisplayedText] = useState('');
   
-  // Strict check for "No Answer" scenario
+  // 严格检查“无答案”场景
   const isNoAnswer = answer.includes('未找到相关对策') || answer.includes('未找到相关内容');
 
-  // Clean effect if answer changes completely
+  // 如果答案完全改变，清除效果
   useEffect(() => {
     if (loading) {
       setDisplayedText('');
     } else if (complete) {
-      setDisplayedText(answer); // Show full text if complete
+      setDisplayedText(answer); // 如果完成，显示全文
     } else {
-        // Typing simulation if streaming (but here mock just changes full text likely)
+        // 模拟流式打字（但这里可能只是更改全文）
         let i = 0;
         const interval = setInterval(() => {
           setDisplayedText(prev => {
@@ -34,7 +34,7 @@ const AIPanel: React.FC<AIPanelProps> = ({ answer, loading, complete, sources, o
             clearInterval(interval);
             return prev;
           });
-        }, 30); // Speed
+        }, 30); // 速度
         return () => clearInterval(interval);
     }
   }, [answer, loading, complete]);
@@ -99,10 +99,10 @@ const AIPanel: React.FC<AIPanelProps> = ({ answer, loading, complete, sources, o
       animate={{ opacity: 1, y: 0 }}
       className="glass-card p-6 md:p-8 relative overflow-hidden group"
     >
-      {/* Decorative Gradient Background */}
+      {/* 装饰性渐变背景 */}
       <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-blue-100/50 to-purple-100/30 rounded-bl-full pointer-events-none -mr-16 -mt-16"></div>
 
-      {/* Header */}
+      {/* 头部 */}
       <div className="flex items-center gap-3 mb-6 relative z-10">
         <div className="p-2 rounded-lg bg-blue-100 text-blue-600 shadow-sm ring-1 ring-blue-200">
           <Lightbulb size={20} className={loading ? "animate-pulse" : ""} />
@@ -124,7 +124,7 @@ const AIPanel: React.FC<AIPanelProps> = ({ answer, loading, complete, sources, o
         )}
       </div>
 
-      {/* Content Area */}
+      {/* 内容区域 */}
       <div className="prose prose-slate prose-lg max-w-none relative z-10 min-h-[200px]">
         {loading ? (
           <div className="space-y-4 animate-pulse">
@@ -150,7 +150,7 @@ const AIPanel: React.FC<AIPanelProps> = ({ answer, loading, complete, sources, o
         )}
       </div>
 
-      {/* Citations Footer (Mock) */}
+      {/* 引用页脚（模拟） */}
       {!loading && (
         <div className="mt-8 pt-6 border-t border-slate-100 flex gap-2 flex-wrap text-sm text-slate-500">
           <span className="font-medium mr-2">参考来源:</span>

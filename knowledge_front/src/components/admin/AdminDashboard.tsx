@@ -115,7 +115,7 @@ const QaLogsTable = () => {
                             </button>
                         </div>
                         <div className="p-6 overflow-y-auto space-y-6 flex-1">
-                            {/* Metadata Card */}
+                            {/* 元数据卡片 */}
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
                                 <div className="space-y-1">
                                     <div className="text-xs text-slate-400 uppercase font-bold">记录时间</div>
@@ -137,7 +137,7 @@ const QaLogsTable = () => {
                                 </div>
                             </div>
 
-                            {/* Q&A Section */}
+                            {/* 问答部分 */}
                             <div className="space-y-6">
                                 <div>
                                     <h4 className="flex items-center gap-2 text-sm font-bold text-slate-700 mb-3">
@@ -157,7 +157,7 @@ const QaLogsTable = () => {
                                     <div className="prose prose-slate prose-sm max-w-none bg-white p-6 rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                                         <ReactMarkdown 
                                             components={{
-                                                // Optional: Custom styling for markdown elements if prose isn't enough
+                                                // 可选：如果 prose 样式不够用，可自定义 markdown 元素样式
                                                 h1: ({node, ...props}) => <h1 className="text-xl font-bold mb-4 text-slate-800" {...props} />,
                                                 h2: ({node, ...props}) => <h2 className="text-lg font-bold mb-3 text-slate-800 mt-6" {...props} />,
                                                 h3: ({node, ...props}) => <h3 className="text-base font-bold mb-2 text-slate-800 mt-4" {...props} />,
@@ -336,7 +336,7 @@ const AdminDashboard: React.FC = () => {
             });
         } finally {
             setIsUploading(false);
-            e.target.value = ''; // Reset input
+            e.target.value = ''; // 重置输入
         }
     };
 
@@ -366,7 +366,7 @@ const AdminDashboard: React.FC = () => {
     return (
         <div className="pt-24 pb-12 px-6 max-w-7xl mx-auto min-h-screen">
             <div className="flex flex-col md:flex-row gap-8">
-                {/* Sidebar Navigation */}
+                {/* 侧边导航 */}
                 <div className="w-full md:w-64 bg-white rounded-2xl p-4 shadow-sm h-fit">
                     <div className="text-xs font-bold text-slate-400 uppercase mb-4 px-2">管理控制台</div>
                     <nav className="space-y-1">
@@ -423,7 +423,7 @@ const AdminDashboard: React.FC = () => {
                     </nav>
                 </div>
 
-                {/* Main Content */}
+                {/* 主要内容 */}
                 <div className="flex-1">
                     {activeTab === 'upload' && (
                         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-2xl p-8 shadow-sm border border-dashed border-slate-300 flex flex-col items-center justify-center min-h-[400px]">
@@ -565,7 +565,7 @@ const FileGovernanceTable = () => {
             if (res.ok) {
                 const data = await res.json();
                 const sorted = data.items.sort((a: any, b: any) => {
-                    // Sort PENDING to top
+                    // 将待审核项排在最前
                     const scoreA = a.status === 'PENDING_REVIEW' ? 2 : (a.status === 'REJECTED' ? 0 : 1);
                     const scoreB = b.status === 'PENDING_REVIEW' ? 2 : (b.status === 'REJECTED' ? 0 : 1);
                     if (scoreA !== scoreB) return scoreB - scoreA;

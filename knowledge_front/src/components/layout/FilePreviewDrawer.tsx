@@ -6,7 +6,7 @@ interface FilePreviewDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   fileTitle: string;
-  citationText?: string; // The text that was cited by AI
+  citationText?: string; // AI 引用的文本
   docId?: string;
 }
 
@@ -91,7 +91,7 @@ const FilePreviewDrawer: React.FC<FilePreviewDrawerProps> = ({ isOpen, onClose, 
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* Backdrop */}
+          {/* 背景遮罩 */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -100,7 +100,7 @@ const FilePreviewDrawer: React.FC<FilePreviewDrawerProps> = ({ isOpen, onClose, 
             className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm z-[60]"
           />
 
-          {/* Drawer */}
+          {/* 抽屉容器 */}
           <motion.div
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
@@ -108,7 +108,7 @@ const FilePreviewDrawer: React.FC<FilePreviewDrawerProps> = ({ isOpen, onClose, 
             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
             className="fixed top-0 right-0 h-full w-[90%] md:w-[75%] lg:w-[60%] bg-white shadow-2xl z-[70] flex flex-col border-l border-slate-200"
           >
-            {/* Header */}
+            {/* 头部 */}
             <div className="h-16 border-b border-slate-100 flex items-center justify-between px-6 bg-slate-50/50 backdrop-blur-md">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-blue-100 rounded-lg text-blue-600">
@@ -144,10 +144,10 @@ const FilePreviewDrawer: React.FC<FilePreviewDrawerProps> = ({ isOpen, onClose, 
               </div>
             </div>
 
-            {/* Main Content Area (Split View) */}
+            {/* 主要内容区域（分栏视图） */}
             <div className="flex-1 flex overflow-hidden">
               
-              {/* Left: Reader */}
+              {/* 左侧：阅读器 */}
               <div className="flex-1 bg-white overflow-y-auto border-r border-slate-100">
                 <div className="mx-auto w-full max-w-3xl px-5 sm:px-8 lg:px-10 py-8">
                   <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 sm:p-8 lg:p-10 text-slate-800 leading-relaxed">
@@ -173,7 +173,7 @@ const FilePreviewDrawer: React.FC<FilePreviewDrawerProps> = ({ isOpen, onClose, 
                 </div>
               </div>
 
-                {/* Right: Real Metadata */}
+                {/* 右侧：真实元数据 */}
                 <div className="w-80 bg-white border-l border-slate-100 flex flex-col hidden lg:flex">
                 <div className="p-6 border-b border-slate-100">
                   <h3 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">

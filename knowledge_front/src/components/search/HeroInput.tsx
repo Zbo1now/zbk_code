@@ -12,7 +12,7 @@ const HeroInput: React.FC<HeroInputProps> = ({ onSearch, className }) => {
   const [isFocused, setIsFocused] = useState(false);
   const [useRerank, setUseRerank] = useState(true);
 
-  // Suggested questions for nice UX
+  // 提升用户体验的建议问题
   const suggestions = [
     "压铸模具热处理",
     "汽车发动机散热器材料",
@@ -26,7 +26,7 @@ const HeroInput: React.FC<HeroInputProps> = ({ onSearch, className }) => {
       animate={{ opacity: 1, scale: 1 }}
       className={`relative w-full max-w-3xl mx-auto ${className}`}
     >
-      {/* Floating Functions (Moved Out) */}
+      {/* 浮动功能（已移出） */}
       <div className="absolute -top-8 right-0 z-20 flex items-center justify-end">
         <button
           type="button"
@@ -45,14 +45,14 @@ const HeroInput: React.FC<HeroInputProps> = ({ onSearch, className }) => {
         </button>
       </div>
 
-      {/* Glow Effect */}
+      {/* 发光效果 */}
       <div className={`pointer-events-none absolute -inset-1 bg-gradient-to-r from-blue-300 via-purple-300 to-indigo-300 rounded-2xl blur-xl opacity-20 transition-opacity duration-500 ${isFocused ? 'opacity-50 scale-105' : ''}`}></div>
 
-      {/* Input Container */}
+      {/* 输入框容器 */}
       <div 
         className={`relative z-10 flex items-center bg-white/80 backdrop-blur-xl border border-blue-100/50 shadow-2xl rounded-2xl transition-all duration-300 overflow-visible ${isFocused ? 'ring-2 ring-blue-500/20' : ''}`}
       >
-        {/* Animated Icon */}
+        {/* 动画图标 */}
         <div className="pl-5 text-slate-400">
           <AnimatePresence mode="wait">
             {isFocused ? (
@@ -77,7 +77,7 @@ const HeroInput: React.FC<HeroInputProps> = ({ onSearch, className }) => {
           </AnimatePresence>
         </div>
 
-        {/* Input Field */}
+        {/* 输入区域 */}
         <input
           type="text"
           value={query}
@@ -91,9 +91,9 @@ const HeroInput: React.FC<HeroInputProps> = ({ onSearch, className }) => {
           className="w-full bg-transparent px-4 py-5 text-lg text-slate-800 placeholder-slate-400 focus:outline-none placeholder:text-base font-medium"
         />
 
-        {/* Right Actions */}
+        {/* 右侧操作栏 */}
         <div className="pr-3 flex items-center gap-1">
-          {/* Upload Button */}
+          {/* 上传按钮 */}
           <button 
             className="p-2.5 rounded-xl hover:bg-slate-100 text-slate-400 transition-colors tooltip hover:text-blue-500"
             title="上传文档"
@@ -101,11 +101,11 @@ const HeroInput: React.FC<HeroInputProps> = ({ onSearch, className }) => {
             <Paperclip size={20} />
           </button>
           
-          {/* Divider */}
+          {/* 分隔线 */}
           <div className="h-6 w-px bg-slate-200 mx-1"></div>
 
-          {/* Send Button */}
-          <button 
+          {/* 发送按钮 */}
+          <button  
             onClick={() => query.trim() && onSearch(query, useRerank)}
             className={`p-2.5 rounded-xl transition-all duration-300 flex items-center justify-center ${
               query.trim() 
@@ -119,14 +119,14 @@ const HeroInput: React.FC<HeroInputProps> = ({ onSearch, className }) => {
         </div>
       </div>
 
-      {/* Decorative Technical Markers */}
+      {/* 装饰性技术标记 */}
       <div className="absolute -left-8 top-1/2 -translate-y-1/2 hidden xl:flex flex-col gap-1 opacity-20">
          <div className="w-2 h-2 rounded-full border border-slate-900"></div>
          <div className="w-px h-12 bg-slate-900 mx-auto"></div>
          <div className="w-2 h-2 rounded-full border border-slate-900"></div>
       </div>
 
-      {/* Quick Suggestions */}
+      {/* 快速建议 */}
       <AnimatePresence>
         {(isFocused || query.length === 0) && (
           <motion.div 

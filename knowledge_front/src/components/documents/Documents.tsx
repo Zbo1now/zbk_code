@@ -11,7 +11,7 @@ interface DocumentItem {
   fileSize?: number;
   fileType?: string;
   status: 'UPLOADED' | 'INDEXED' | 'FAILED' | 'PARSING' | 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED';
-  createdAt: string; // ISO string
+  createdAt: string; // ISO 格式时间字符串
   errorMessage?: string;
 }
 
@@ -60,7 +60,7 @@ const DocCard: React.FC<DocCardProps> = ({ doc, coverColor, onClick, onDelete, o
     className="group relative bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-xl transition-all overflow-hidden cursor-pointer"
   >
     <div className="absolute top-2 right-2 z-10 flex gap-2">
-       {/* Review Actions */}
+       {/* 审核操作 */}
        {doc.status === 'PENDING_REVIEW' && (
          <div className="flex gap-1 bg-white/90 backdrop-blur rounded-lg p-1 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">
             <button 
@@ -89,7 +89,7 @@ const DocCard: React.FC<DocCardProps> = ({ doc, coverColor, onClick, onDelete, o
        </button>
     </div>
 
-    {/* Cover Preview Area */}
+    {/* 封面预览区域 */}
     <div className={`h-28 ${coverColor} relative p-4 flex flex-col justify-end`}>
        <div className={`absolute top-2 left-2 px-2 py-0.5 rounded text-[10px] font-bold ${statusColors[doc.status] || 'bg-slate-100 text-slate-500'}`}>
           {statusLabels[doc.status] || doc.status}
@@ -100,7 +100,7 @@ const DocCard: React.FC<DocCardProps> = ({ doc, coverColor, onClick, onDelete, o
       </div>
     </div>
 
-    {/* Content Area */}
+    {/* 内容区域 */}
     <div className="p-4">
       <h3 className="font-bold text-slate-800 line-clamp-2 mb-2 group-hover:text-blue-600 transition-colors text-sm h-10" title={doc.displayName || doc.originalFilename}>
         {doc.displayName || doc.originalFilename}
@@ -158,7 +158,7 @@ const Documents: React.FC<DocumentsProps> = ({ onOpenPreview }) => {
 
   useEffect(() => {
     fetchDocs();
-    const interval = setInterval(fetchDocs, 5000); // Auto refresh status
+    const interval = setInterval(fetchDocs, 5000); // 自动刷新状态
     return () => clearInterval(interval);
   }, []);
 
@@ -176,7 +176,7 @@ const Documents: React.FC<DocumentsProps> = ({ onOpenPreview }) => {
         body: formData,
       });
       if (res.ok) {
-        // Refresh list
+        // 刷新列表
         await fetchDocs();
         setDialog({
           title: '上传成功',
@@ -270,7 +270,7 @@ const Documents: React.FC<DocumentsProps> = ({ onOpenPreview }) => {
     });
   };
 
-  // Static gradients for visual variety
+  // 静态渐变色以增加视觉变化
   const gradients = [
     "bg-gradient-to-br from-red-400 to-orange-500",
     "bg-gradient-to-br from-blue-400 to-indigo-500",
@@ -283,7 +283,7 @@ const Documents: React.FC<DocumentsProps> = ({ onOpenPreview }) => {
   return (
     <div className="pt-24 pb-12 px-6 max-w-7xl mx-auto min-h-screen">
       
-      {/* Header & Search */}
+      {/* 头部和搜索栏 */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
         <div>
           <h1 className="text-3xl font-bold text-slate-800 mb-2">文档知识库</h1>
@@ -308,7 +308,7 @@ const Documents: React.FC<DocumentsProps> = ({ onOpenPreview }) => {
                 </label>
             </div>
 
-            {/* Glassmorphism Search Bar */}
+            {/* 毛玻璃效果搜索栏 */}
             <div className="relative group w-full md:w-80">
             <div className="absolute inset-0 bg-blue-500/20 rounded-xl blur-lg opacity-0 group-hover:opacity-100 transition-opacity" />
             <div className="relative flex items-center bg-white/60 backdrop-blur-xl border border-white/50 shadow-sm rounded-xl px-4 py-3 focus-within:ring-2 focus-within:ring-blue-500/50 focus-within:bg-white/80 transition-all">
@@ -348,7 +348,7 @@ const Documents: React.FC<DocumentsProps> = ({ onOpenPreview }) => {
               <p>知识库暂无文档，请点击右上角上传</p>
           </div>
       ) : (
-        /* Document Grid */
+        /* 文档网格 */
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             <AnimatePresence>
             {docs.map((doc, idx) => (

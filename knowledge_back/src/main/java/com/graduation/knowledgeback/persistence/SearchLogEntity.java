@@ -29,10 +29,10 @@ public class SearchLogEntity {
     private Integer totalLatency;
 
     @Column(name = "es_latency")
-    private Integer esLatency; // Keyword search latency
+    private Integer esLatency; // 关键词搜索延迟
 
     @Column(name = "model_latency")
-    private Integer modelLatency; // Embedding + Rerank latency
+    private Integer modelLatency; // 嵌入 + 重排序延迟
 
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
