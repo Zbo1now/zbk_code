@@ -26,23 +26,22 @@ const HeroInput: React.FC<HeroInputProps> = ({ onSearch, className }) => {
       animate={{ opacity: 1, scale: 1 }}
       className={`relative w-full max-w-3xl mx-auto ${className}`}
     >
-      {/* Function Toggles - Industrial Label Style */}
-      <div className="relative z-10 flex justify-end mb-2 mr-2 gap-3">
-        <button 
+      {/* Floating Functions (Moved Out) */}
+      <div className="absolute -top-8 right-0 z-20 flex items-center justify-end">
+        <button
           type="button"
           onClick={(e) => {
             e.preventDefault();
             setUseRerank((prev) => !prev);
           }}
-          aria-pressed={useRerank}
-          className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono border transition-all ${
-            useRerank 
-              ? 'bg-blue-600/10 border-blue-500/30 text-blue-600' 
-              : 'bg-slate-100 border-slate-200 text-slate-400'
-          }`}
+          className="group flex items-center gap-2 px-2 py-1 transition-all cursor-pointer select-none hover:bg-slate-100/50 rounded-full"
         >
-          {useRerank ? <Zap size={10} className="fill-current" /> : <Database size={10} />}
-          {useRerank ? 'AI精排模式' : '基础检索模式'}
+          <span className="text-[10px] font-bold tracking-widest uppercase transition-colors text-slate-500 group-hover:text-slate-600">
+            AI Rerank
+          </span>
+          <div className={`relative w-8 h-4 rounded-full transition-all duration-300 ${useRerank ? 'bg-slate-600 shadow-inner' : 'bg-slate-200'}`}>
+            <div className={`absolute top-0.5 left-0.5 w-[14px] h-[12px] bg-white rounded-full shadow-sm transition-all duration-300 ${useRerank ? 'translate-x-3.5' : 'translate-x-0'}`} />
+          </div>
         </button>
       </div>
 
@@ -140,7 +139,7 @@ const HeroInput: React.FC<HeroInputProps> = ({ onSearch, className }) => {
               <button
                 key={suggestion}
                 onClick={() => { setQuery(suggestion); onSearch(suggestion, useRerank); }}
-                className="px-3 py-1.5 bg-white/60 border border-slate-200/60 rounded-lg text-xs font-medium text-slate-600 hover:bg-white hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm backdrop-blur-sm"
+                className="px-3 py-1.5 bg-white/40 border border-slate-200/50 rounded-lg text-xs font-medium text-slate-500 hover:bg-white hover:text-blue-600 hover:border-blue-200 hover:shadow-sm hover:-translate-y-0.5 transition-all duration-300"
               >
                 {suggestion}
               </button>

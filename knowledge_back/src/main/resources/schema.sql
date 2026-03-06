@@ -113,3 +113,20 @@ CREATE TABLE `feedback` (
   INDEX `idx_search_id` (`search_id`),
   INDEX `idx_doc_id` (`doc_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='搜索效果反馈表';
+
+-- ===============================================================================
+-- 6. QA 日志表 (QA Logs)
+-- 记录用户提问和 LLM 生成的回答
+-- 对应实体: com.graduation.knowledgeback.persistence.QaLogEntity
+-- ===============================================================================
+DROP TABLE IF EXISTS `qa_logs`;
+CREATE TABLE `qa_logs` (
+  `id` BIGINT AUTO_INCREMENT NOT NULL,
+  `query` TEXT NOT NULL COMMENT '用户问题',
+  `answer` TEXT COMMENT 'LLM 回答',
+  `duration_ms` BIGINT NOT NULL COMMENT '生成耗时(ms)',
+  `source_count` INT NOT NULL COMMENT '引用的源数量',
+  `timestamp` DATETIME(6) NOT NULL COMMENT '记录时间',
+  PRIMARY KEY (`id`),
+  INDEX `idx_timestamp` (`timestamp`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='问答日志表';

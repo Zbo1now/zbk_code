@@ -5,6 +5,8 @@
 @layer base {
   body {
     @apply antialiased text-slate-900 bg-slate-50 overflow-x-hidden;
+    font-family: "Inter", "Montserrat", "HarmonyOS Sans", "Alibaba PuHuiTi", "SF Pro Display", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
   }
 }
 
@@ -26,7 +28,7 @@
   }
 
   .text-gradient {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600;
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-blue-400;
   }
 }
 

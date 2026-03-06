@@ -8,6 +8,9 @@ interface Source {
   summary: string;
   score: number;
   docId?: string;
+  fileType?: string;
+  pageStart?: number | null;
+  pageEnd?: number | null;
 }
 
 interface SourceBarProps {
@@ -38,8 +41,18 @@ const SourceBar: React.FC<SourceBarProps> = ({ sources, onOpenPreview }) => {
                   <FileText size={16} />
                 </div>
                 <div className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
-                  {(source.score * 100).toFixed(0)}%
+                  [{index + 1}] {(source.score * 100).toFixed(0)}%
                 </div>
+              </div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                  {source.fileType || 'DOC'}
+                </span>
+                {source.pageStart != null && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                    P.{source.pageStart}{source.pageEnd && source.pageEnd !== source.pageStart ? `-${source.pageEnd}` : ''}
+                  </span>
+                )}
               </div>
               <h4 className="font-semibold text-sm text-slate-800 line-clamp-2 leading-snug group-hover:text-blue-700 transition-colors">
                 {source.title}
@@ -48,7 +61,7 @@ const SourceBar: React.FC<SourceBarProps> = ({ sources, onOpenPreview }) => {
             
             <div className="mt-3 flex items-end justify-between">
               <span className="text-xs text-slate-400 line-clamp-1">
-                P. {index + 1} - 2024.03.15
+                {source.pageStart != null ? `P.${source.pageStart}` : '命中片段'}
               </span>
               <ArrowUpRight size={14} className="text-slate-300 group-hover:text-blue-500 transition-colors" />
             </div>

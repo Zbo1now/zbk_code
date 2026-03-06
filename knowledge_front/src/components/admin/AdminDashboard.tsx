@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, Trash2, Cpu, Activity, FileText, CheckCircle, Database, AlertCircle, Eye, EyeOff, Edit3, Folder } from 'lucide-react';
+import { Upload, Trash2, Cpu, Activity, FileText, CheckCircle, Database, AlertCircle, Eye, EyeOff, Edit3, Folder, X, Search } from 'lucide-react';
 import { motion } from 'framer-motion';
+import ReactMarkdown from 'react-markdown';
 import ActionDialog from '../ui/ActionDialog';
 
 interface SystemStatus {
@@ -27,6 +28,241 @@ const statusLabel = (status: string) => {
   }
 };
 
+const QaLogsTable = () => {
+    const [logs, setLogs] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [selectedLog, setSelectedLog] = useState<any>(null);
+
+    useEffect(() => {
+        fetch('/api/v1/qa/logs')
+            .then(res => res.json())
+            .then(data => setLogs(data))
+            .catch(err => console.error(err))
+            .finally(() => setLoading(false));
+    }, []);
+
+    if (loading) return <div className="p-8 text-center text-slate-400">加载日志数据...</div>;
+
+    return (
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+            <div className="p-4 border-b border-slate-50 bg-slate-50/50 flex justify-between items-center">
+                <div>
+                    <h3 className="font-bold text-slate-700">问答日志监控</h3>
+                    <p className="text-xs text-slate-400">用户提问与 AI 回答记录</p>
+                </div>
+                <div className="text-xs text-slate-400">共 {logs.length} 条</div>
+            </div>
+            <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left align-middle border-collapse">
+                    <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-100">
+                        <tr>
+                            <th className="px-6 py-4 whitespace-nowrap">时间</th>
+                            <th className="px-6 py-4 whitespace-nowrap">耗时</th>
+                            <th className="px-6 py-4 whitespace-nowrap">来源数</th>
+                            <th className="px-6 py-4 min-w-[200px]">用户提问</th>
+                            <th className="px-6 py-4 min-w-[300px]">回答预览</th>
+                            <th className="px-6 py-4 w-10"></th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                        {logs.map(log => (
+                            <tr key={log.id} className="hover:bg-slate-50 transition-colors group cursor-pointer" onClick={() => setSelectedLog(log)}>
+                                <td className="px-6 py-4 text-slate-500 text-sm whitespace-nowrap align-top pt-5">
+                                    {new Date(log.timestamp).toLocaleString()}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap align-top pt-5">
+                                    <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${log.durationMs > 8000 ? 'bg-red-50 text-red-600' :
+                                            log.durationMs > 3000 ? 'bg-amber-50 text-amber-600' :
+                                                'bg-emerald-50 text-emerald-600'
+                                        }`}>
+                                        {(log.durationMs / 1000).toFixed(2)}s
+                                    </span>
+                                </td>
+                                <td className="px-6 py-4 text-center align-top pt-5">
+                                    <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-medium ${log.sourceCount === 0 ? 'bg-slate-100 text-slate-400' : 'bg-blue-50 text-blue-600'}`}>
+                                        {log.sourceCount}
+                                    </span>
+                                </td>
+                                <td className="px-6 py-4 max-w-xs align-top pt-5">
+                                    <div className="font-medium text-slate-800 text-sm line-clamp-2" title={log.query}>
+                                        {log.query}
+                                    </div>
+                                </td>
+                                <td className="px-6 py-4 max-w-sm align-top pt-5">
+                                    <div className="text-slate-600 text-sm line-clamp-2" title={log.answer}>
+                                        {log.answer}
+                                    </div>
+                                </td>
+                                <td className="px-6 py-4 align-top pt-5">
+                                    <Eye size={16} className="text-slate-300 group-hover:text-blue-500 transition-colors" />
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+
+            {selectedLog && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm" onClick={() => setSelectedLog(null)}>
+                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between p-6 border-b border-slate-100 flex-shrink-0">
+                            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                <Activity className="text-blue-500" size={20} />
+                                问答详情
+                            </h3>
+                            <button onClick={() => setSelectedLog(null)} className="p-2 hover:bg-slate-100 rounded-full text-slate-400 transition-colors">
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div className="p-6 overflow-y-auto space-y-6 flex-1">
+                            {/* Metadata Card */}
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                                <div className="space-y-1">
+                                    <div className="text-xs text-slate-400 uppercase font-bold">记录时间</div>
+                                    <div className="text-sm font-medium text-slate-700">{new Date(selectedLog.timestamp).toLocaleString()}</div>
+                                </div>
+                                <div className="space-y-1">
+                                    <div className="text-xs text-slate-400 uppercase font-bold">总耗时</div>
+                                    <div className={`text-sm font-bold ${selectedLog.durationMs > 5000 ? 'text-amber-600' : 'text-green-600'}`}>
+                                        {(selectedLog.durationMs / 1000).toFixed(2)}s
+                                    </div>
+                                </div>
+                                <div className="space-y-1">
+                                    <div className="text-xs text-slate-400 uppercase font-bold">引用来源</div>
+                                    <div className="text-sm font-medium text-slate-700">{selectedLog.sourceCount} 个文档片段</div>
+                                </div>
+                                <div className="space-y-1">
+                                    <div className="text-xs text-slate-400 uppercase font-bold">日志 ID</div>
+                                    <div className="text-xs font-mono text-slate-500 break-all">{selectedLog.id}</div>
+                                </div>
+                            </div>
+
+                            {/* Q&A Section */}
+                            <div className="space-y-6">
+                                <div>
+                                    <h4 className="flex items-center gap-2 text-sm font-bold text-slate-700 mb-3">
+                                        <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs">Q</div>
+                                        用户提问
+                                    </h4>
+                                    <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 text-slate-800 font-medium text-base shadow-sm">
+                                        {selectedLog.query}
+                                    </div>
+                                </div>
+                                
+                                <div>
+                                    <h4 className="flex items-center gap-2 text-sm font-bold text-slate-700 mb-3">
+                                        <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-xs">A</div>
+                                        AI 回答
+                                    </h4>
+                                    <div className="prose prose-slate prose-sm max-w-none bg-white p-6 rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                                        <ReactMarkdown 
+                                            components={{
+                                                // Optional: Custom styling for markdown elements if prose isn't enough
+                                                h1: ({node, ...props}) => <h1 className="text-xl font-bold mb-4 text-slate-800" {...props} />,
+                                                h2: ({node, ...props}) => <h2 className="text-lg font-bold mb-3 text-slate-800 mt-6" {...props} />,
+                                                h3: ({node, ...props}) => <h3 className="text-base font-bold mb-2 text-slate-800 mt-4" {...props} />,
+                                                ul: ({node, ...props}) => <ul className="list-disc pl-5 space-y-1 mb-4 text-slate-600" {...props} />,
+                                                ol: ({node, ...props}) => <ol className="list-decimal pl-5 space-y-1 mb-4 text-slate-600" {...props} />,
+                                                li: ({node, ...props}) => <li className="pl-1" {...props} />,
+                                                p: ({node, ...props}) => <p className="mb-4 leading-relaxed text-slate-600" {...props} />,
+                                                strong: ({node, ...props}) => <strong className="font-bold text-slate-800" {...props} />,
+                                                code: ({node, ...props}) => <code className="bg-slate-100 px-1 py-0.5 rounded text-sm font-mono text-slate-700" {...props} />,
+                                                blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-slate-200 pl-4 italic text-slate-500 my-4" {...props} />,
+                                            }}
+                                        >
+                                            {selectedLog.answer}
+                                        </ReactMarkdown>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+
+
+const SearchLogsTable = () => {
+    const [logs, setLogs] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        fetch('/api/v1/search/logs')
+            .then(res => res.json())
+            .then(data => setLogs(data))
+            .catch(err => console.error(err))
+            .finally(() => setLoading(false));
+    }, []);
+
+    if (loading) return <div className="p-8 text-center text-slate-400">加载性能日志...</div>;
+
+    return (
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden mt-6">
+            <div className="p-4 border-b border-slate-50 bg-slate-50/50 flex justify-between items-center">
+                <div>
+                    <h3 className="font-bold text-slate-700">检索性能监控</h3>
+                    <p className="text-xs text-slate-400">ES/Vector/Rerank 底层耗时分析</p>
+                </div>
+                <div className="text-xs text-slate-400">共 {logs.length} 条</div>
+            </div>
+            <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                    <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-100">
+                        <tr>
+                            <th className="px-6 py-4 whitespace-nowrap">时间</th>
+                            <th className="px-6 py-4 whitespace-nowrap">总耗时</th>
+                            <th className="px-6 py-4 whitespace-nowrap">ES耗时</th>
+                            <th className="px-6 py-4 whitespace-nowrap">模型耗时</th>
+                            <th className="px-6 py-4 whitespace-nowrap">精排 (Rerank)</th>
+                            <th className="px-6 py-4 whitespace-nowrap">召回数</th>
+                            <th className="px-6 py-4 min-w-[200px]">Query</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                        {logs.map((log: any) => (
+                            <tr key={log.logId} className="hover:bg-slate-50 transition-colors">
+                                <td className="px-6 py-4 text-slate-500 text-xs whitespace-nowrap">
+                                    {new Date(log.createdAt).toLocaleString()}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap font-medium">
+                                    <span className={`${log.totalLatency > 1000 ? 'text-amber-600' : 'text-slate-700'}`}>
+                                        {log.totalLatency}ms
+                                    </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-slate-500 text-xs">
+                                    {log.esLatency}ms
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-slate-500 text-xs">
+                                    {log.modelLatency}ms
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                    {log.hasRerank ? (
+                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-50 text-indigo-600 border border-indigo-100">
+                                            已启用
+                                        </span>
+                                    ) : (
+                                        <span className="text-slate-400 text-xs px-2 py-0.5 border border-slate-100 bg-slate-50 rounded">未调用</span>
+                                    )}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-center text-slate-600">
+                                    {log.resultCount}
+                                </td>
+                                <td className="px-6 py-4 max-w-xs truncate text-slate-600" title={log.queryText}>
+                                    {log.queryText}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+};
+
+
 const docStatusLabels: Record<string, string> = {
     UPLOADED: '已上传',
     PARSING: '解析中',
@@ -38,8 +274,9 @@ const docStatusLabels: Record<string, string> = {
 };
 
 const AdminDashboard: React.FC = () => {
-    const [activeTab, setActiveTab] = useState<'upload' | 'files' | 'manage' | 'system'>('upload');
+    const [activeTab, setActiveTab] = useState<'upload' | 'files' | 'manage' | 'system' | 'logs' | 'search_perf'>('upload');
     const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
+
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isUploading, setIsUploading] = useState(false);
@@ -159,12 +396,29 @@ const AdminDashboard: React.FC = () => {
                         </button>
                         <div className="h-px bg-slate-100 my-2" />
                         <button
-                            onClick={() => setActiveTab('system')}
-                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-sm font-medium ${activeTab === 'system' ? 'bg-blue-50 text-blue-600' : 'text-slate-600 hover:bg-slate-50'
+                            onClick={() => setActiveTab('logs')}
+                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-sm font-medium ${activeTab === 'logs' ? 'bg-blue-50 text-blue-600' : 'text-slate-600 hover:bg-slate-50'
                                 }`}
                         >
                             <Activity size={18} />
-                            系统监控
+                            问答日志
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('search_perf')}
+                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-sm font-medium ${activeTab === 'search_perf' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-600 hover:bg-slate-50'
+                                }`}
+                        >
+                            <Database size={18} />
+                            检索性能
+                        </button>
+                        <div className="h-px bg-slate-100 my-2" />
+                        <button
+                            onClick={() => setActiveTab('system')}
+                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-sm font-medium ${activeTab === 'system' ? 'bg-slate-100 text-slate-900' : 'text-slate-600 hover:bg-slate-50'
+                                }`}
+                        >
+                            <Cpu size={18} />
+                            系统状态
                         </button>
                     </nav>
                 </div>
@@ -198,7 +452,20 @@ const AdminDashboard: React.FC = () => {
                         </motion.div>
                     )}
 
+                    {activeTab === 'logs' && (
+                        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
+                            <QaLogsTable />
+                        </motion.div>
+                    )}
+
+                    {activeTab === 'search_perf' && (
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                            <SearchLogsTable />
+                        </motion.div>
+                    )}
+
                     {activeTab === 'system' && (
+
                         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="grid md:grid-cols-2 gap-6">
                             {loading && <div className="col-span-2 text-center py-10 text-slate-500">正在检查系统状态...</div>}
 
@@ -392,7 +659,7 @@ const FileGovernanceTable = () => {
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-slate-100">
             <div className="p-4 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
                 <h3 className="font-bold text-slate-700">文档审核列表</h3>
-                <button onClick={fetchDocs} className="text-sm text-blue-600 hover:underline">刷新列表</button>
+                <button type="button" onClick={fetchDocs} className="text-sm text-blue-600 hover:underline">刷新列表</button>
             </div>
             <div className="overflow-x-auto">
                 <table className="w-full text-sm text-left">
@@ -631,7 +898,7 @@ const DocumentManagement = () => {
                         placeholder="搜索文档名称或ID"
                         className="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200"
                     />
-                    <button onClick={fetchDocs} className="text-sm text-blue-600 hover:underline">刷新列表</button>
+                    <button type="button" onClick={fetchDocs} className="text-sm text-blue-600 hover:underline">刷新列表</button>
                 </div>
             </div>
             <div className="overflow-x-auto">

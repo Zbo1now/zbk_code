@@ -4,23 +4,32 @@ import com.graduation.knowledgeback.api.dto.PipelineSearchRequest;
 import com.graduation.knowledgeback.api.dto.PipelineSearchResponse;
 import com.graduation.knowledgeback.api.dto.SingleSearchRequest;
 import com.graduation.knowledgeback.api.dto.SingleSearchResponse;
+import com.graduation.knowledgeback.persistence.SearchLogEntity;
+import com.graduation.knowledgeback.persistence.SearchLogRepository;
 import com.graduation.knowledgeback.service.SearchService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/search")
 @Tag(name = "检索 Search", description = "对单知识库进行混合检索：ES 关键词召回 + Qdrant 向量召回，使用 RRF 融合；可选调用模型服务进行 rerank 精排。")
 public class SearchController {
     private final SearchService searchService;
+    private final SearchLogRepository searchLogRepository;
 
-    public SearchController(SearchService searchService) {
+    public SearchController(SearchService searchService, SearchLogRepository searchLogRepository) {
         this.searchService = searchService;
+        this.searchLogRepository = searchLogRepository;
+    }
+
+    @GetMapping("/logs")
+    @Operation(summary = "获取检索日志", description = "返回最近的检索性能日志")
+    public List<SearchLogEntity> getLogs() {
+        return searchLogRepository.findAllByOrderByCreatedAtDesc();
     }
 
     @PostMapping("/pipeline")

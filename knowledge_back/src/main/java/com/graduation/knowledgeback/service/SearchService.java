@@ -11,9 +11,12 @@ import com.graduation.knowledgeback.client.ElasticsearchClient;
 import com.graduation.knowledgeback.client.ModelServiceClient;
 import com.graduation.knowledgeback.client.QdrantClient;
 import com.graduation.knowledgeback.domain.ChunkHit;
+import com.graduation.knowledgeback.persistence.SearchLogEntity;
+import com.graduation.knowledgeback.persistence.SearchLogRepository;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -27,17 +30,20 @@ public class SearchService {
     private final QdrantClient qdrantClient;
     private final ModelServiceClient modelServiceClient;
     private final ObjectMapper objectMapper;
+    private final SearchLogRepository searchLogRepository;
 
     public SearchService(
             ElasticsearchClient elasticsearchClient,
             QdrantClient qdrantClient,
             ModelServiceClient modelServiceClient,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            SearchLogRepository searchLogRepository
     ) {
         this.elasticsearchClient = elasticsearchClient;
         this.qdrantClient = qdrantClient;
         this.modelServiceClient = modelServiceClient;
         this.objectMapper = objectMapper;
+        this.searchLogRepository = searchLogRepository;
     }
 
     public PipelineSearchResponse pipeline(PipelineSearchRequest req) {
@@ -88,6 +94,32 @@ public class SearchService {
             timing.put("rerankMs", rerankMs);
         }
 
+        // --- Logging ---
+        try {
+            // Model Latency = Vector Search (approx embedded time included implicitly or explicitly) + Rerank
+            // For rigorous timing, vectorMs includes embedding + qdrant search.
+            long modelTotalMs = vectorMs + rerankMs;
+            
+            // ES Latency = Keyword search
+            long esTotalMs = keywordMs;
+
+            SearchLogEntity log = new SearchLogEntity(
+                searchId,
+                null, // user_id is unknown in this context, can be passed if needed
+                req.query(),
+                "HYBRID", // Defaulting to HYBRID as code does both
+                Boolean.TRUE.equals(req.useRerank()),
+                results.size(),
+                (int) totalMs,
+                (int) esTotalMs,
+                (int) modelTotalMs,
+                Instant.now()
+            );
+            searchLogRepository.save(log);
+        } catch (Exception e) {
+            System.err.println("Failed to save search log: " + e.getMessage());
+        }
+        // --- End Logging ---
         return new PipelineSearchResponse(searchId, req.query(), totalMs, timing, results);
     }
 

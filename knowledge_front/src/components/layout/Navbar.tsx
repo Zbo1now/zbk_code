@@ -19,9 +19,12 @@ const Navbar: React.FC<NavbarProps> = ({ onNavigate, activeView, isAdmin, onTogg
         <div className="p-2 bg-blue-600 rounded-xl text-white shadow-lg shadow-blue-500/30 group-hover:scale-110 transition-transform">
           <Bot size={24} />
         </div>
-        <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-700 to-indigo-700">
-          Knowledge RAG
-        </span>
+        <div className="flex flex-col leading-tight">
+          <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-700 to-indigo-700">
+            铸见
+          </span>
+          <span className="text-[10px] text-slate-400">让每一份工业文档，都能在关键时刻开口说话</span>
+        </div>
       </div>
 
       {/* Tabs */}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Navbar from './components/layout/Navbar';
 import HeroInput from './components/search/HeroInput';
 import AIPanel from './components/results/AIPanel';
@@ -10,15 +10,39 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, FolderUp } from 'lucide-react';
 
 function App() {
-  const [view, setView] = useState<'home' | 'result' | 'documents' | 'admin'>('home');
+  const [view, setView] = useState<'home' | 'result' | 'documents' | 'admin'>(() => {
+    try {
+      const saved = window.localStorage.getItem('czj_view');
+      if (saved === 'home' || saved === 'result' || saved === 'documents' || saved === 'admin') {
+        return saved;
+      }
+      return 'home';
+    } catch {
+      return 'home';
+    }
+  });
   const [isAdmin, setIsAdmin] = useState(true); // Role State
   const [previewDoc, setPreviewDoc] = useState<{title: string, citation: string, docId?: string} | null>(null);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [answer, setAnswer] = useState('');
   const [complete, setComplete] = useState(false);
-  const [sources, setSources] = useState<Array<{ id: string; title: string; summary: string; score: number; docId?: string }>>([]);
+  const [sources, setSources] = useState<Array<{ id: string; title: string; summary: string; score: number; docId?: string; fileType?: string; pageStart?: number | null; pageEnd?: number | null }>>([]);
   const [docTitleMap, setDocTitleMap] = useState<Record<string, string>>({});
+
+  const stripExtension = (name: string) => {
+    if (!name) return name;
+    const idx = name.lastIndexOf('.');
+    return idx > 0 ? name.slice(0, idx) : name;
+  };
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('czj_view', view);
+    } catch {
+      // ignore storage errors
+    }
+  }, [view]);
 
   const ensureDocTitleMap = async () => {
     if (Object.keys(docTitleMap).length > 0) return docTitleMap;
@@ -29,7 +53,8 @@ function App() {
       const map: Record<string, string> = {};
       (data.items || []).forEach((item: any) => {
         if (item.docId) {
-          map[item.docId] = item.displayName || item.originalFilename || item.docId;
+          const raw = item.displayName || item.originalFilename || item.docId;
+          map[item.docId] = stripExtension(raw);
         }
       });
       setDocTitleMap(map);
@@ -57,13 +82,25 @@ function App() {
       const results = data?.sources || [];
       const titleMap = await ensureDocTitleMap();
 
-      const builtSources = results.map((item: any, idx: number) => ({
+      const builtSources = results.map((item: any, idx: number) => {
+        const rawTitle = titleMap[item.docId] || item.source || item.docId || '未知文档';
+        const guessType = (() => {
+          const text = (rawTitle || '').toString();
+          const match = text.match(/\.([a-zA-Z0-9]+)$/);
+          if (match) return match[1].toUpperCase();
+          return item?.source?.toString().split('.').pop()?.toUpperCase() || null;
+        })();
+        return {
         id: item.chunkIds?.[0] || `${item.docId || 'doc'}_${idx}`,
         docId: item.docId,
-        title: titleMap[item.docId] || item.source || item.docId || '未知文档',
+        title: stripExtension(rawTitle),
         summary: item.content || '',
-        score: typeof item.score === 'number' ? item.score : 0
-      }));
+        score: typeof item.score === 'number' ? item.score : 0,
+        fileType: guessType || undefined,
+        pageStart: item.pageStart ?? null,
+        pageEnd: item.pageEnd ?? null
+        };
+      });
       setSources(builtSources);
 
       const answerText = data?.answer || '未生成有效答案。';
@@ -133,14 +170,18 @@ function App() {
               transition={{ duration: 0.3 }}
               className="flex flex-col items-center justify-center flex-grow py-20"
             >
-              <div className="text-center mb-12">
-                <h1 className="text-5xl font-extrabold mb-6 tracking-tight">
-                  <span className="text-slate-800">智慧检索，</span>
-                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">洞见非凡</span>
+              <div className="text-center mb-16">
+                <h1 className="text-7xl font-bold mb-6 tracking-tight text-slate-800 drop-shadow-sm">
+                  <span>铸见</span>
+                  <span className="mx-3 text-slate-300 font-light text-5xl align-middle">·</span>
+                  <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-900 to-blue-700">洞悉工业</span>
                 </h1>
-                <p className="text-xl text-slate-500 max-w-2xl mx-auto leading-relaxed">
-                  基于 RAG 技术的下一代工业知识问答引擎。<br/>
-                  融合文档解析、语义检索与大模型推理，为您提供精准可靠的专业解答。
+                <h2 className="text-lg text-slate-600 font-medium tracking-[0.15em] leading-relaxed mb-8 uppercase">
+                  让每一份工业文档 · 都能在关键时刻开口说话
+                </h2>
+                <p className="text-base text-slate-500 max-w-xl mx-auto leading-relaxed tracking-wide font-normal">
+                  面向工业场景的深度知识检索与问答系统<br/>
+                  <span className="text-slate-400 text-sm mt-2 block">融合文档解析 / 语义检索 / 专业对话能力</span>
                 </p>
               </div>
 
@@ -170,7 +211,21 @@ function App() {
               </div>
 
               <div className="space-y-6">
-                <AIPanel answer={answer} loading={loading} complete={complete} />
+                <AIPanel
+                  answer={answer}
+                  loading={loading}
+                  complete={complete}
+                  sources={sources}
+                  onCitationClick={(index) => {
+                    const source = sources[index];
+                    if (!source) return;
+                    setPreviewDoc({
+                      docId: source.docId,
+                      title: source.title,
+                      citation: source.summary
+                    });
+                  }}
+                />
                 
                 {complete && !loading && (
                   <motion.div
