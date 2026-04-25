@@ -15,6 +15,8 @@ interface DocumentItem {
   errorMessage?: string;
 }
 
+const isVisibleDocument = (doc: DocumentItem) => doc.status !== 'FAILED';
+
 const statusColors = {
   UPLOADED: 'bg-blue-100 text-blue-700',
   PARSING: 'bg-amber-100 text-amber-700',
@@ -146,8 +148,9 @@ const Documents: React.FC<DocumentsProps> = ({ onOpenPreview }) => {
       const res = await fetch('/api/v1/knowledge/documents?page=1&pageSize=50');
       if (res.ok) {
         const data = await res.json();
-        setDocs(data.items);
-        setTotal(data.total);
+        const visibleDocs = (data.items || []).filter(isVisibleDocument);
+        setDocs(visibleDocs);
+        setTotal(visibleDocs.length);
       }
     } catch (e) {
       console.error("Failed to fetch docs", e);
@@ -342,10 +345,10 @@ const Documents: React.FC<DocumentsProps> = ({ onOpenPreview }) => {
           <div className="flex justify-center py-20">
               <Loader2 className="animate-spin text-slate-300" size={48} />
           </div>
-      ) : docs.length === 0 ? (
+        ) : docs.length === 0 ? (
           <div className="text-center py-20 text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
               <FileWarning size={48} className="mx-auto mb-4 opacity-50" />
-              <p>知识库暂无文档，请点击右上角上传</p>
+            <p>知识库暂无已索引文档，请稍后再试或上传新文档</p>
           </div>
       ) : (
         /* 文档网格 */

@@ -741,6 +741,8 @@ interface ManagedDoc {
     errorMessage?: string;
 }
 
+const isIndexedManagedDoc = (doc: ManagedDoc) => doc.status === 'INDEXED';
+
 const DocumentManagement = () => {
     const [docs, setDocs] = useState<ManagedDoc[]>([]);
     const [loading, setLoading] = useState(true);
@@ -764,7 +766,7 @@ const DocumentManagement = () => {
             const res = await fetch('/api/v1/knowledge/documents?page=1&pageSize=100&includeHidden=true');
             if (res.ok) {
                 const data = await res.json();
-                setDocs(data.items || []);
+                setDocs((data.items || []).filter(isIndexedManagedDoc));
             }
         } catch (e) {
             console.error(e);

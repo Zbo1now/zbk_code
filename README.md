@@ -29,7 +29,7 @@
 | :--- | :--- |
 | **前端** | React 18, TypeScript, Tailwind CSS, Framer Motion, Lucide React, Vite |
 | **后端** | Spring Boot 3, MyBatis-Plus, Redis, MySQL 8 |
-| **模型服务** | Python 3.9, FastAPI, HuggingFace (Transformers/Sentence-Transformers), PyTorch |
+| **模型服务** | Python 3.10, FastAPI, HuggingFace (Transformers/Sentence-Transformers), PyTorch |
 | **检索引擎** | Elasticsearch 8.x, Qdrant |
 | **LLM API** | SiliconFlow (DeepSeek-V3 / Qwen2.5) |
 
@@ -37,29 +37,41 @@
 
 ### 1. 环境准备
 
-*   Docker & Docker Compose
-*   Java 17+, Node.js 16+, Python 3.9+
-*   申请 SiliconFlow API Key
+*   Docker Desktop / Docker Compose
+*   Java 17+, Node.js LTS, Python 3.10+
+*   本地 MySQL 8.4（本项目当前使用 `root / 123456`，库名 `knowledge_base`）
+*   申请 SiliconFlow API Key（如需启用 LLM 问答）
 
 ### 2. 部署中间件
 
 ```bash
-docker-compose up -d mysql es qdrant redis
+cd knowledge_rag
+docker compose pull
+docker compose up -d
 ```
+
+说明：`docker-compose.yml` 里当前只包含 Elasticsearch、Kibana、Qdrant，MySQL 使用本地安装，不在 Docker 内启动。
 
 ### 3. 启动模型服务 (knowledge_rag)
 
 ```bash
 cd knowledge_rag
-pip install -r requirements.txt
-python -m model_service.main
-# 或根据实际入口文件调整，例如: python main.py
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m uvicorn model_service.main:app --host 0.0.0.0 --port 8000 --reload
 ```
+
+启动后可访问：`http://127.0.0.1:8000/health`
 
 ### 4. 启动后端 (knowledge_back)
 
-1.  修改 `knowledge_back/src/main/resources/application.yml` 中的 API Key 与数据库配置。
-2.  运行 `KnowledgeBackApplication.java`。
+1.  确认 `knowledge_back/src/main/resources/application.yml` 已配置为本地 MySQL：`localhost:3306`、`root`、`123456`，数据库名 `knowledge_base`。
+2.  在 `knowledge_back` 目录下执行：
+
+```bash
+mvn spring-boot:run
+```
+
+如果你更习惯 IDE，也可以直接运行 `KnowledgeBackApplication.java`。
 
 ### 5. 启动前端 (knowledge_front)
 
@@ -68,6 +80,8 @@ cd knowledge_front
 npm install
 npm run dev
 ```
+
+启动后默认访问：`http://localhost:5173`
 
 ## 📁 目录说明
 
