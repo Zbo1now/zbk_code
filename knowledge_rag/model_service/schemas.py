@@ -43,6 +43,13 @@ class RerankResponse(BaseModel):
     results: list[RerankResult]
 
 
+class Document(BaseModel):
+    page_content: str = ""
+    doc_id: str | None = None
+    source: str | None = None
+    score: float | None = None
+
+
 class SearchRequest(BaseModel):
     query: str = Field(min_length=1, max_length=512)
     top_k: int = Field(default=10, ge=1, le=100)

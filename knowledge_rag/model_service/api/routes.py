@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Any
+from typing import Any, List
+import logging
+import os
+from collections import Counter
 
 from fastapi import APIRouter, HTTPException
-from sentence_transformers import SentenceTransformer
 
 try:
     from qdrant_client import QdrantClient  # type: ignore
@@ -30,8 +32,13 @@ router = APIRouter()
 
 
 @lru_cache
-def _get_embedder() -> SentenceTransformer:
+def _get_embedder() -> Any:
     settings = get_settings()
+    os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
+    try:
+        from sentence_transformers import SentenceTransformer
+    except Exception as exc:
+        raise RuntimeError(f"Failed to import sentence-transformers/torch: {exc}") from exc
     return SentenceTransformer(settings.embed_model)
 
 
@@ -88,6 +95,22 @@ def _qdrant_points(result: Any) -> list[Any]:
     if points is not None:
         return list(points)
     return []
+
+
+def _token_overlap_score(query: str, text: str) -> float:
+    q_tokens = [t for t in query.lower().split() if t]
+    d_tokens = [t for t in text.lower().split() if t]
+    if not q_tokens or not d_tokens:
+        return 0.0
+    q_count = Counter(q_tokens)
+    d_count = Counter(d_tokens)
+    common = sum(min(q_count[k], d_count[k]) for k in q_count.keys())
+    return common / max(len(q_tokens), 1)
+
+
+def warmup_models() -> None:
+    # Preload embedder to reduce first-request timeout from Java side.
+    _get_embedder()
 
 
 def _scroll_neighbors(
@@ -287,7 +310,13 @@ def health() -> HealthResponse:
 @router.post("/embed", response_model=EmbedResponse)
 def embed(req: EmbedRequest) -> EmbedResponse:
     settings = get_settings()
-    model = _get_embedder()
+    try:
+        model = _get_embedder()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Embedding model unavailable: {exc}",
+        ) from exc
 
     vectors = model.encode(req.texts, normalize_embeddings=settings.normalize_embeddings)
 
@@ -312,16 +341,13 @@ def embed(req: EmbedRequest) -> EmbedResponse:
 @router.post("/rerank", response_model=RerankResponse)
 def rerank(req: RerankRequest) -> RerankResponse:
     settings = get_settings()
-    if not settings.rerank_model:
-        raise HTTPException(
-            status_code=501,
-            detail="Reranker not configured. Set RERANK_MODEL to enable /rerank.",
-        )
-
-    # 说明：这里先给一个最小可用的占位实现（不加载 cross-encoder），
-    # 后续你确定 reranker 模型后我再接入 CrossEncoder 做真实打分。
-    results = [RerankResult(doc_id=item.doc_id, score=0.0) for item in req.items[: req.top_k]]
-    return RerankResponse(model=settings.rerank_model, results=results)
+    scored = [
+        (item.doc_id, _token_overlap_score(req.query, item.text))
+        for item in req.items
+    ]
+    scored.sort(key=lambda x: x[1], reverse=True)
+    results = [RerankResult(doc_id=doc_id, score=float(score)) for doc_id, score in scored[: req.top_k]]
+    return RerankResponse(model=settings.rerank_model or "fallback-token-overlap", results=results)
 
 
 @router.post("/search", response_model=SearchResponse)
@@ -332,7 +358,13 @@ def search(req: SearchRequest) -> SearchResponse:
         raise HTTPException(status_code=500, detail="Missing dependency qdrant-client")
 
     qdrant = _get_qdrant()
-    model = _get_embedder()
+    try:
+        model = _get_embedder()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Embedding model unavailable: {exc}",
+        ) from exc
 
     query_vec = model.encode(req.query, normalize_embeddings=settings.normalize_embeddings)
     query_vec_list = _as_float_list(query_vec)
@@ -363,3 +395,4 @@ def search(req: SearchRequest) -> SearchResponse:
     )
 
     return SearchResponse(query=req.query, top_k=req.top_k, w=w, results=merged)
+

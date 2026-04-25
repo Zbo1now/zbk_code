@@ -1,9 +1,17 @@
 from __future__ import annotations
 
+import warnings
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from model_service.api.routes import router
+warnings.filterwarnings(
+    "ignore",
+    message=r".*resume_download.*deprecated.*",
+    category=FutureWarning,
+)
+
+from model_service.api.routes import router, warmup_models
 from model_service.settings import get_settings
 
 
@@ -25,6 +33,15 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(router)
+
+    @app.on_event("startup")
+    def _warmup() -> None:
+        try:
+            warmup_models()
+        except Exception:
+            # Keep service available even if model warmup fails.
+            pass
+
     return app
 
 

@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.venv/Scripts/pip.exe install:*)",
+      "Bash(E:/HuaweiMoveData/Users/刘朝勃/Desktop/毕设/刘朝勃毕设/code/knowledge_rag/.venv/Scripts/pip.exe:*)",
+      "Bash(E:/HuaweiMoveData/Users/刘朝勃/Desktop/毕设/刘朝勃毕设/code/knowledge_rag/.venv/Scripts/python.exe:*)",
+      "Bash(\"E:/HuaweiMoveData/Users/刘朝勃/Desktop/毕设/刘朝勃毕设/code/knowledge_rag/.venv/Scripts/python.exe\" -m pip install fastapi \"uvicorn[standard]\" python-multipart pydantic-settings -i https://pypi.tuna.tsinghua.edu.cn/simple)",
+      "Bash(\"E:/HuaweiMoveData/Users/刘朝勃/Desktop/毕设/刘朝勃毕设/code/knowledge_rag/.venv/Scripts/python.exe\" -m pip install elasticsearch==8.11.1 \"qdrant-client>=1.7.0\" -i https://pypi.tuna.tsinghua.edu.cn/simple)",
+      "Bash(\"E:/HuaweiMoveData/Users/刘朝勃/Desktop/毕设/刘朝勃毕设/code/knowledge_rag/.venv/Scripts/python.exe\" -m pip install numpy scikit-learn python-dotenv loguru requests tqdm beautifulsoup4 lxml pandas openpyxl pdfplumber python-docx -i https://pypi.tuna.tsinghua.edu.cn/simple)",
+      "Bash(\"E:/HuaweiMoveData/Users/刘朝勃/Desktop/毕设/刘朝勃毕设/code/knowledge_rag/.venv/Scripts/python.exe\" -m pip install torch sentence-transformers -i https://pypi.tuna.tsinghua.edu.cn/simple)",
+      "Bash(.venv/Scripts/python.exe -m uvicorn model_service.main:app --host 0.0.0.0 --port 8000)",
+      "Bash(\"E:/HuaweiMoveData/Users/刘朝勃/Desktop/毕设/刘朝勃毕设/code/knowledge_rag/.venv/Scripts/python.exe\" -m pip uninstall torch -y)",
+      "Bash(\"E:/HuaweiMoveData/Users/刘朝勃/Desktop/毕设/刘朝勃毕设/code/knowledge_rag/.venv/Scripts/python.exe\" -m pip install torch --index-url https://download.pytorch.org/whl/cpu)",
+      "Bash(\"E:/HuaweiMoveData/Users/刘朝勃/Desktop/毕设/刘朝勃毕设/code/knowledge_rag/.venv/Scripts/python.exe\" -m pip install torch==2.2.2 --index-url https://download.pytorch.org/whl/cpu)",
+      "Bash(\"E:/HuaweiMoveData/Users/刘朝勃/Desktop/毕设/刘朝勃毕设/code/knowledge_rag/.venv/Scripts/python.exe\" -m pip install \"numpy<2\" -i https://pypi.tuna.tsinghua.edu.cn/simple)"
+    ]
+  }
+}

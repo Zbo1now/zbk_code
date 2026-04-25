@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useLayoutEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, FileText, Download, Share2, AlertCircle } from 'lucide-react';
 
@@ -14,6 +14,8 @@ const FilePreviewDrawer: React.FC<FilePreviewDrawerProps> = ({ isOpen, onClose, 
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const highlightRef = useRef<HTMLSpanElement>(null);
   const [previewMeta, setPreviewMeta] = useState<{
     fileType?: string | null;
     status?: string | null;
@@ -87,6 +89,70 @@ const FilePreviewDrawer: React.FC<FilePreviewDrawerProps> = ({ isOpen, onClose, 
     }
   }, [isOpen]);
 
+  // 当内容和引用文本准备好时，确保在抽屉动画完毕并且 DOM 稳定后精准滚动
+  useEffect(() => {
+    if (!loading && content && citationText && highlightRef.current) {
+      // 延迟确保侧边栏划出动画（通常 300-500ms）完成后再进行计算和滚动，避免动画过程中的坐标错位
+      const timer = setTimeout(() => {
+        highlightRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 400); 
+      return () => clearTimeout(timer);
+    }
+  }, [loading, content, citationText]);
+
+  // 高亮处理逻辑
+  const renderContent = () => {
+    if (!content) return '暂无可预览内容';
+    if (!citationText) return content;
+
+    let index = content.indexOf(citationText);
+    let matchedText = citationText;
+
+    // 严苛的完全匹配如果失败，尝试忽略空白符、换行符的容错正则匹配
+    if (index === -1) {
+      try {
+        const trimmedCitation = citationText.trim();
+        if (trimmedCitation.length > 2) {
+          // 将普通文本中的各种连续空白、换行符替换为正则的 \s+
+          const regexStr = trimmedCitation.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+          const regex = new RegExp(regexStr, 'i');
+          const match = content.match(regex);
+          if (match && match.index !== undefined) {
+            index = match.index;
+            matchedText = match[0];
+          } else {
+             // 二次退保：只取一小段开头（比如前 20 个字符）进行精准匹配，防止末尾被大模型截断或增添字符
+             const shortCitation = trimmedCitation.substring(0, Math.min(20, trimmedCitation.length));
+             const shortRegexStr = shortCitation.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+             const shortRegex = new RegExp(shortRegexStr, 'i');
+             const shortMatch = content.match(shortRegex);
+             if (shortMatch && shortMatch.index !== undefined) {
+                index = shortMatch.index;
+                matchedText = shortMatch[0];
+             }
+          }
+        }
+      } catch (e) {
+        console.error("高亮正则匹配发生错误", e);
+      }
+    }
+
+    if (index === -1) return content;
+
+    const before = content.substring(0, index);
+    const after = content.substring(index + matchedText.length);
+
+    return (
+      <>
+        {before}
+        <span ref={highlightRef} className="bg-yellow-200 text-slate-900 px-1 rounded-sm ring-2 ring-yellow-400 font-medium transition-colors duration-500">
+          {matchedText}
+        </span>
+        {after}
+      </>
+    );
+  };
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -148,25 +214,32 @@ const FilePreviewDrawer: React.FC<FilePreviewDrawerProps> = ({ isOpen, onClose, 
             <div className="flex-1 flex overflow-hidden">
               
               {/* 左侧：阅读器 */}
-              <div className="flex-1 bg-white overflow-y-auto border-r border-slate-100">
+              <div ref={scrollContainerRef} className="flex-1 bg-white overflow-y-auto border-r border-slate-100 scroll-smooth">
                 <div className="mx-auto w-full max-w-3xl px-5 sm:px-8 lg:px-10 py-8">
                   <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 sm:p-8 lg:p-10 text-slate-800 leading-relaxed">
                     <h1 className="text-xl sm:text-2xl font-bold mb-6 text-center border-b pb-3">{previewMeta?.displayName || fileTitle}</h1>
                   {loading && (
-                    <div className="text-sm text-slate-400">正在加载文档内容...</div>
+                    <div className="text-sm text-slate-400 italic">正在加载文档内容...</div>
                   )}
                   {error && (
-                    <div className="text-sm text-red-500">预览失败: {error}</div>
+                    <div className="text-sm text-red-500 flex items-center gap-2">
+                      <AlertCircle size={14} /> 预览失败: {error}
+                    </div>
                   )}
                   {!loading && !error && (
-                    <pre className="whitespace-pre-wrap text-sm leading-7 text-slate-700 font-sans">
-                      {content || '暂无可预览内容'}
+                    <pre className="whitespace-pre-wrap text-[13px] sm:text-sm leading-7 text-slate-700 font-sans tracking-wide">
+                      {renderContent()}
                     </pre>
                   )}
                   {citationText && (
-                    <div className="mt-6 p-4 bg-yellow-50 border border-yellow-100 rounded-lg text-sm text-slate-700">
-                      <div className="font-medium text-yellow-700 mb-2">AI 引用片段</div>
-                      <div className="whitespace-pre-wrap">{citationText}</div>
+                    <div className="mt-8 p-5 bg-blue-50/50 border border-blue-100 rounded-xl text-sm text-slate-700 relative overflow-hidden group">
+                      <div className="absolute top-0 left-0 w-1 h-full bg-blue-400" />
+                      <div className="font-bold text-blue-700 mb-2 flex items-center gap-2">
+                        <Share2 size={14} /> AI 引用片段溯源
+                      </div>
+                      <div className="whitespace-pre-wrap text-slate-600 text-xs leading-5 italic bg-white/50 p-3 rounded-lg border border-blue-50">
+                        {citationText}
+                      </div>
                     </div>
                   )}
                   </div>

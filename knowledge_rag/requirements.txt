@@ -2,7 +2,6 @@
 fastapi>=0.100.0
 uvicorn[standard]>=0.20.0  # ASGI 服务器
 python-multipart          # 允许接口上传文件
-pydantic-settings>=2.0.0
 pydantic-settings>=2.0.0  # BaseSettings (Pydantic v2)
 
 # --- 数据库客户端 ---
@@ -10,9 +9,13 @@ elasticsearch==8.11.1     # 必须与 Docker 里的 ES 8.11.1 匹配，避免兼
 qdrant-client>=1.7.0      # 对应 Docker 的 Qdrant
 
 # --- AI 与 模型 ---
-torch                     # PyTorch (CPU版即可，除非你本地有N卡)
-sentence-transformers>=2.2.2 # 加载 Embedding 和精排模型
-numpy
+torch==2.2.2+cpu         # 稳定 CPU 版本，避免 Windows 上 2.11 的 DLL/兼容问题
+torchvision==0.17.2+cpu
+torchaudio==2.2.2+cpu
+transformers==4.41.2     # 与 sentence-transformers 2.7.0 配套
+sentence-transformers==2.7.0 # 加载 Embedding 和精排模型
+numpy<2                  # torch 2.2.x 需配合 NumPy 1.x
+safetensors>=0.4.3
 scikit-learn              # 用于计算简单的余弦相似度（备用）
 
 # --- 数据处理工具 ---

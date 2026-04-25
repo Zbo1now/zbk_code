@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 from functools import lru_cache
+import os
+from typing import ClassVar
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_SETTINGS_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 class Settings(BaseSettings):
@@ -29,6 +33,10 @@ class Settings(BaseSettings):
 
     # post-processing
     neighbor_window: int = Field(default=1, ge=0, le=3)
+
+    # Reranker 模型配置
+    RERANKER_MODEL_NAME: ClassVar[str] = "bge-reranker-large"
+    RERANKER_MODEL_PATH: ClassVar[str] = os.path.join(_SETTINGS_DIR, "models", "reranker")
 
 
 @lru_cache

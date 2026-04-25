@@ -16,44 +16,53 @@ const AIPanel: React.FC<AIPanelProps> = ({ answer, loading, complete, sources, o
   // 严格检查“无答案”场景
   const isNoAnswer = answer.includes('未找到相关对策') || answer.includes('未找到相关内容');
 
-  // 如果答案完全改变，清除效果
+  // 处理真正的流式打字效果
   useEffect(() => {
     if (loading) {
       setDisplayedText('');
-    } else if (complete) {
-      setDisplayedText(answer); // 如果完成，显示全文
-    } else {
-        // 模拟流式打字（但这里可能只是更改全文）
-        let i = 0;
-        const interval = setInterval(() => {
-          setDisplayedText(prev => {
-            if (i < answer.length) {
-              i++;
-              return answer.substring(0, i);
-            }
+      return;
+    }
+    
+    let interval: NodeJS.Timeout;
+    
+    if (answer.length > displayedText.length) {
+      interval = setInterval(() => {
+        setDisplayedText(prev => {
+          if (prev.length < answer.length) {
+            return answer.substring(0, prev.length + 1);
+          } else {
             clearInterval(interval);
             return prev;
-          });
-        }, 30); // 速度
-        return () => clearInterval(interval);
+          }
+        });
+      }, 30);
+    } else if (answer !== displayedText && complete) {
+      setDisplayedText(answer);
     }
+    
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [answer, loading, complete]);
 
-  const renderAnswerWithCitations = (text: string) => {
-    if (!text) return null;
-    const parts = text.split(/(\[\d+\])/g);
+  const renderAnswerWithCitations = (answerText: string) => {
+    if (!answerText) return null;
+    const parts = answerText.split(/(\[\d+\])/g);
     return parts.map((part, index) => {
       const match = part.match(/^\[(\d+)\]$/);
       if (match) {
         const num = parseInt(match[1], 10);
-        const source = sources[num - 1];
+        // 查找该引用编号对应的第一个源
+        const sourceIndex = sources.findIndex((_, idx) => idx + 1 === num);
+        const source = sourceIndex !== -1 ? sources[sourceIndex] : null;
+        
         return (
           <button
             key={`cite-${index}`}
             type="button"
-            className="ml-1 inline-flex items-center rounded-full bg-blue-50 text-blue-600 text-xs px-2 py-0.5 hover:bg-blue-100 transition-colors"
+            className="ml-1 inline-flex items-center rounded-full bg-blue-50 text-blue-600 text-xs px-2 py-0.5 hover:bg-blue-100 transition-colors cursor-pointer"
             title={source ? source.title : '未匹配到来源'}
-            onClick={() => onCitationClick && onCitationClick(num - 1)}
+            onClick={() => source && onCitationClick && onCitationClick(sourceIndex)}
           >
             [{num}]
           </button>
@@ -61,6 +70,18 @@ const AIPanel: React.FC<AIPanelProps> = ({ answer, loading, complete, sources, o
       }
       return <span key={`text-${index}`}>{part}</span>;
     });
+  };
+
+  // 提取回答中实际引用过的所有编号（去重）
+  const getUsedCitationIndices = () => {
+    const matches = answer.match(/\[(\d+)\]/g);
+    if (!matches) return [];
+    // 提取数字并去重，转换为从 0 开始的索引
+    const nums = matches.map(m => parseInt(m.match(/\d+/)?.[0] || '0', 10));
+    return Array.from(new Set(nums))
+      .filter(num => num > 0 && num <= sources.length)
+      .map(num => num - 1)
+      .sort((a, b) => a - b);
   };
 
   if (isNoAnswer && complete && !loading) {
@@ -140,31 +161,40 @@ const AIPanel: React.FC<AIPanelProps> = ({ answer, loading, complete, sources, o
               className="text-slate-600 leading-relaxed whitespace-pre-wrap"
             >
               {renderAnswerWithCitations(displayedText)}
-              <motion.span 
-                animate={{ opacity: [0, 1, 0] }} 
-                transition={{ repeat: Infinity, duration: 0.8 }}
-                className="inline-block w-2 h-4 bg-blue-500 ml-1 align-middle"
-              />
+              {!complete && (
+                <motion.span 
+                  animate={{ opacity: [0, 1, 0] }} 
+                  transition={{ repeat: Infinity, duration: 0.8 }}
+                  className="inline-block w-2 h-4 bg-blue-500 ml-1 align-middle"
+                />
+              )}
             </motion.div>
           </AnimatePresence>
         )}
       </div>
 
-      {/* 引用页脚（模拟） */}
+      {/* 引用页脚（按引用顺序且去重） */}
       {!loading && (
-        <div className="mt-8 pt-6 border-t border-slate-100 flex gap-2 flex-wrap text-sm text-slate-500">
-          <span className="font-medium mr-2">参考来源:</span>
-          {sources.slice(0, 6).map((source, idx) => (
-            <button
-              key={source.id}
-              type="button"
-              onClick={() => onCitationClick && onCitationClick(idx)}
-              className="px-2 py-1 bg-slate-100 rounded text-xs text-blue-600 hover:bg-blue-50 cursor-pointer transition-colors"
-              title={source.title}
-            >
-              [{idx + 1}] {source.title}
-            </button>
-          ))}
+        <div className="mt-8 pt-6 border-t border-slate-100 flex gap-2 flex-wrap text-sm text-slate-500 relative z-10">
+          <span className="font-medium mr-2 flex items-center gap-2">
+             <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+             参考来源:
+          </span>
+          {getUsedCitationIndices().map((sourceIdx) => {
+            const source = sources[sourceIdx];
+            return (
+              <button
+                key={`${source.id}-${sourceIdx}`}
+                type="button"
+                onClick={() => onCitationClick && onCitationClick(sourceIdx)}
+                className="px-3 py-1.5 bg-slate-50 border border-slate-100 rounded-lg text-xs text-blue-600 hover:bg-blue-50 hover:border-blue-100 hover:shadow-sm cursor-pointer transition-all flex items-center gap-1.5"
+                title={source.title}
+              >
+                <span className="opacity-60">[{sourceIdx + 1}]</span> 
+                <span className="font-medium max-w-[120px] truncate">{source.title}</span>
+              </button>
+            );
+          })}
         </div>
       )}
     </motion.div>
