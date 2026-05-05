@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Sparkles, Send, Paperclip, Settings2, Zap, Database } from 'lucide-react';
+import { Search, Sparkles, Send, Paperclip } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface HeroInputProps {

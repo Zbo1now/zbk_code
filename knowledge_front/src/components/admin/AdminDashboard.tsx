@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, Trash2, Cpu, Activity, FileText, CheckCircle, Database, AlertCircle, Eye, EyeOff, Edit3, Folder, X, Search } from 'lucide-react';
+import { Upload, Trash2, Cpu, Activity, FileText, CheckCircle, Database, AlertCircle, Eye, EyeOff, Edit3, Folder, X } from 'lucide-react';
 import { motion } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import ActionDialog from '../ui/ActionDialog';
@@ -11,6 +11,13 @@ interface SystemStatus {
   latencyMs: number | null;
   qdrantCount: number | null;
   rerankerModel: string;
+}
+
+interface ChunkSettingsResponse {
+  chunkSize: number;
+  overlap: number;
+  defaultChunkSize: number;
+  defaultOverlap: number;
 }
 
 const statusLabel = (status: string) => {
@@ -280,6 +287,9 @@ const AdminDashboard: React.FC = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isUploading, setIsUploading] = useState(false);
+    const [chunkSettings, setChunkSettings] = useState<ChunkSettingsResponse | null>(null);
+    const [chunkSizeInput, setChunkSizeInput] = useState('500');
+    const [overlapInput, setOverlapInput] = useState('75');
     const [dialog, setDialog] = useState<{
         title: string;
         message?: string;
@@ -290,16 +300,66 @@ const AdminDashboard: React.FC = () => {
         onConfirm?: () => void;
     } | null>(null);
 
+    const fetchChunkSettings = async () => {
+        try {
+            const res = await fetch('/api/v1/knowledge/chunk-settings');
+            if (!res.ok) return;
+            const data = await res.json();
+            setChunkSettings(data);
+            setChunkSizeInput(String(data.chunkSize));
+            setOverlapInput(String(data.overlap));
+        } catch (error) {
+            console.error(error);
+        }
+    };
+
+    const saveChunkSettings = async () => {
+        const chunkSize = Number(chunkSizeInput);
+        const overlap = Number(overlapInput);
+        if (Number.isNaN(chunkSize) || Number.isNaN(overlap) || chunkSize <= 0 || overlap < 0 || overlap >= chunkSize) {
+            setDialog({
+                title: '切片规则无效',
+                message: '请检查切片长度和重叠长度，要求切片长度大于 0，且重叠长度小于切片长度。',
+                variant: 'warning',
+                confirmLabel: '知道了'
+            });
+            return false;
+        }
+
+        const settingsRes = await fetch('/api/v1/knowledge/chunk-settings', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chunkSize, overlap })
+        });
+
+        if (!settingsRes.ok) {
+            throw new Error('update chunk settings failed');
+        }
+
+        const settingsData = await settingsRes.json().catch(() => null);
+        if (settingsData) {
+            setChunkSettings(settingsData);
+        }
+        return true;
+    };
+
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files || e.target.files.length === 0) return;
 
-        setIsUploading(true);
         const file = e.target.files[0];
+        setIsUploading(true);
         const formData = new FormData();
         formData.append('file', file);
         formData.append('metadata', JSON.stringify({ source: 'admin_upload', role: 'ADMIN' }));
 
         try {
+            const saved = await saveChunkSettings();
+            if (!saved) {
+                setIsUploading(false);
+                e.target.value = '';
+                return;
+            }
+
             const res = await fetch('/api/v1/knowledge/upload', {
                 method: 'POST',
                 body: formData
@@ -356,6 +416,10 @@ const AdminDashboard: React.FC = () => {
             setLoading(false);
         }
     };
+
+    useEffect(() => {
+        fetchChunkSettings();
+    }, []);
 
     useEffect(() => {
         if (activeTab === 'system') {
@@ -434,6 +498,30 @@ const AdminDashboard: React.FC = () => {
                             <p className="text-slate-500 mb-8 text-center max-w-md">
                                 支持 PDF, DOCX, TXT, JSONL 格式。文件需小于 50MB。 <br />上传后默认进入“待审核”列表。
                             </p>
+                            <div className="hidden w-full max-w-xl mb-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                                <div className="text-sm font-semibold text-slate-700 mb-4">切片规则</div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <label className="text-sm text-slate-500">
+                                        <span className="block mb-2">切片长度</span>
+                                        <input
+                                            value={chunkSizeInput}
+                                            onChange={(e) => setChunkSizeInput(e.target.value)}
+                                            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-700 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                                        />
+                                    </label>
+                                    <label className="text-sm text-slate-500">
+                                        <span className="block mb-2">重叠长度</span>
+                                        <input
+                                            value={overlapInput}
+                                            onChange={(e) => setOverlapInput(e.target.value)}
+                                            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-700 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                                        />
+                                    </label>
+                                </div>
+                                <div className="mt-3 text-xs text-slate-400">
+                                    当前系统值：{chunkSettings ? `${chunkSettings.chunkSize} / ${chunkSettings.overlap}` : '--'}
+                                </div>
+                            </div>
                             <div className='relative'>
                                 <input
                                     type="file"
@@ -508,6 +596,61 @@ const AdminDashboard: React.FC = () => {
                                         <div className="mt-4 text-xs text-slate-400">
                                             嵌入模型: bge-m3 <br />
                                             重排模型: {systemStatus.rerankerModel}
+                                        </div>
+                                    </div>
+                                    <div className="md:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                                        <div className="flex items-center justify-between gap-4 mb-4">
+                                            <div>
+                                                <h3 className="font-bold text-slate-800">切片规则</h3>
+                                                <p className="text-sm text-slate-400 mt-1">统一设置后续文档处理使用的切片长度与重叠长度。</p>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={async () => {
+                                                    try {
+                                                        const saved = await saveChunkSettings();
+                                                        if (!saved) return;
+                                                        setDialog({
+                                                            title: '保存成功',
+                                                            message: '切片规则已更新，后续上传与处理将使用新的参数。',
+                                                            variant: 'success',
+                                                            confirmLabel: '知道了'
+                                                        });
+                                                    } catch (error) {
+                                                        console.error(error);
+                                                        setDialog({
+                                                            title: '保存失败',
+                                                            message: '请稍后重试。',
+                                                            variant: 'error',
+                                                            confirmLabel: '知道了'
+                                                        });
+                                                    }
+                                                }}
+                                                className="inline-flex items-center rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800"
+                                            >
+                                                保存规则
+                                            </button>
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <label className="text-sm text-slate-500">
+                                                <span className="block mb-2">切片长度</span>
+                                                <input
+                                                    value={chunkSizeInput}
+                                                    onChange={(e) => setChunkSizeInput(e.target.value)}
+                                                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-700 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                                                />
+                                            </label>
+                                            <label className="text-sm text-slate-500">
+                                                <span className="block mb-2">重叠长度</span>
+                                                <input
+                                                    value={overlapInput}
+                                                    onChange={(e) => setOverlapInput(e.target.value)}
+                                                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-700 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                                                />
+                                            </label>
+                                        </div>
+                                        <div className="mt-3 text-xs text-slate-400">
+                                            当前系统值：{chunkSettings ? `${chunkSettings.chunkSize} / ${chunkSettings.overlap}` : '--'}
                                         </div>
                                     </div>
                                 </>

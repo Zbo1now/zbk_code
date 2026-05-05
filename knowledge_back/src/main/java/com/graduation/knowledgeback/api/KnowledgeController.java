@@ -2,65 +2,67 @@ package com.graduation.knowledgeback.api;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.graduation.knowledgeback.api.dto.DocumentItem;
-import com.graduation.knowledgeback.api.dto.DocumentPreviewResponse;
-import com.graduation.knowledgeback.api.dto.DocumentUpdateRequest;
-import com.graduation.knowledgeback.api.dto.PagedResponse;
-import com.graduation.knowledgeback.api.dto.RebuildRequest;
-import com.graduation.knowledgeback.api.dto.TaskStatusResponse;
-import com.graduation.knowledgeback.api.dto.UploadResponse;
+import com.graduation.knowledgeback.api.dto.*;
+import com.graduation.knowledgeback.client.ElasticsearchClient;
+import com.graduation.knowledgeback.client.QdrantClient;
 import com.graduation.knowledgeback.config.AppProperties;
 import com.graduation.knowledgeback.domain.DocumentStatus;
+import com.graduation.knowledgeback.domain.ProcessingStep;
 import com.graduation.knowledgeback.domain.TaskType;
 import com.graduation.knowledgeback.persistence.DocumentEntity;
 import com.graduation.knowledgeback.persistence.DocumentRepository;
 import com.graduation.knowledgeback.persistence.TaskEntity;
-import com.graduation.knowledgeback.client.ElasticsearchClient;
-import com.graduation.knowledgeback.client.QdrantClient;
+import com.graduation.knowledgeback.service.DocumentProcessingTracker;
 import com.graduation.knowledgeback.service.IndexingService;
+import com.graduation.knowledgeback.service.ParsingService;
 import com.graduation.knowledgeback.service.TaskService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.core.io.FileSystemResource;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/knowledge")
-@Tag(name = "知识库 Knowledge", description = "知识库数据管理（单库模式）：上传导入、文档列表、删除、重建索引、异步任务查询。")
+@Tag(name = "Knowledge", description = "知识库文档管理、处理任务和切片配置接口")
 public class KnowledgeController {
     private final DocumentRepository documentRepository;
     private final TaskService taskService;
     private final IndexingService indexingService;
-    private final com.graduation.knowledgeback.service.ParsingService parsingService;
+    private final ParsingService parsingService;
     private final AppProperties appProperties;
     private final ElasticsearchClient elasticsearchClient;
     private final QdrantClient qdrantClient;
     private final ObjectMapper objectMapper;
+    private final DocumentProcessingTracker documentProcessingTracker;
 
-    public KnowledgeController(DocumentRepository documentRepository,
-                               TaskService taskService,
-                               IndexingService indexingService,
-                               com.graduation.knowledgeback.service.ParsingService parsingService,
-                               AppProperties appProperties,
-                               ElasticsearchClient elasticsearchClient,
-                               QdrantClient qdrantClient,
-                               ObjectMapper objectMapper) {
+    public KnowledgeController(
+            DocumentRepository documentRepository,
+            TaskService taskService,
+            IndexingService indexingService,
+            ParsingService parsingService,
+            AppProperties appProperties,
+            ElasticsearchClient elasticsearchClient,
+            QdrantClient qdrantClient,
+            ObjectMapper objectMapper,
+            DocumentProcessingTracker documentProcessingTracker
+    ) {
         this.documentRepository = documentRepository;
         this.taskService = taskService;
         this.indexingService = indexingService;
@@ -69,45 +71,41 @@ public class KnowledgeController {
         this.elasticsearchClient = elasticsearchClient;
         this.qdrantClient = qdrantClient;
         this.objectMapper = objectMapper;
+        this.documentProcessingTracker = documentProcessingTracker;
     }
 
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(summary = "上传文档（提交审核）", description = "上传文件后，状态默认为 PENDING_REVIEW，需管理员审核通过后才进入解析/索引流程。")
-    public UploadResponse upload(@RequestPart("file") MultipartFile file,
-                                 @Parameter(description = "可选：业务侧元数据（JSON 字符串）")
-                                 @RequestPart(value = "metadata", required = false) String metadataJson) throws Exception {
-        
+    @Operation(summary = "上传文档", description = "上传后进入审核或自动处理流程。")
+    public UploadResponse upload(
+            @RequestPart("file") MultipartFile file,
+            @Parameter(description = "可选 JSON 元数据")
+            @RequestPart(value = "metadata", required = false) String metadataJson
+    ) throws Exception {
         String uploadId = UUID.randomUUID().toString();
         String originalFilename = file.getOriginalFilename();
         if (originalFilename == null || originalFilename.isBlank()) {
             originalFilename = "uploaded_" + uploadId;
         }
-        
-        // 1. 计算文件信息
+
         long fileSize = file.getSize();
-        String fileType = "";
+        String fileType;
         int dotIndex = originalFilename.lastIndexOf(".");
         if (dotIndex >= 0) {
             fileType = originalFilename.substring(dotIndex + 1).toUpperCase();
         } else {
             fileType = "UNKNOWN";
         }
-        
+
         String checksum;
         try (var is = file.getInputStream()) {
             checksum = org.springframework.util.DigestUtils.md5DigestAsHex(is);
         }
 
-        // 2. 保存文件到磁盘
-        // 使用统一的目录结构
         var storedDir = Path.of("storage", "uploads", uploadId);
         Files.createDirectories(storedDir);
         var storedPath = storedDir.resolve(originalFilename);
         Files.copy(file.getInputStream(), storedPath, StandardCopyOption.REPLACE_EXISTING);
 
-        // 3. 创建文档实体，状态为 PENDING_REVIEW
-        // 使用 uploadId 作为初始 docId。
-        // 对于可能包含多个逻辑文档的 .jsonl 文件，先将整个文件作为审核单元。
         DocumentEntity doc = new DocumentEntity();
         doc.setId(uploadId);
         doc.setOriginalFilename(originalFilename);
@@ -117,57 +115,73 @@ public class KnowledgeController {
         doc.setFileType(fileType);
         doc.setChecksum(checksum);
         doc.setUploadTime(java.time.LocalDateTime.now());
+
         boolean autoApprove = shouldAutoApprove(metadataJson);
         doc.setStatus(autoApprove ? DocumentStatus.APPROVED : DocumentStatus.PENDING_REVIEW);
-
         documentRepository.save(doc);
 
+        documentProcessingTracker.recordUpload(doc, autoApprove);
         if (autoApprove) {
+            documentProcessingTracker.recordReview(doc, true);
             String taskId = startProcessing(doc);
-            return new UploadResponse(taskId, uploadId, "APPROVED", "文件上传成功，自动审核通过并开始处理。");
+            return new UploadResponse(taskId, uploadId, "APPROVED", "文件上传成功，已自动审核并开始处理。");
         }
 
         return new UploadResponse(null, uploadId, "PENDING_REVIEW", "文件上传成功，等待管理员审核。");
     }
 
     @PostMapping("/documents/{docId}/review")
-    @Operation(summary = "审核文档", description = "管理员审核文档。action=APPROVE: 开始解析/索引; action=REJECT: 拒绝并标记。")
+    @Operation(summary = "审核文档", description = "管理员审核通过后开始处理，拒绝则保留状态记录。")
     public ResponseEntity<?> reviewDocument(@PathVariable String docId, @RequestParam String action) {
         var docOpt = documentRepository.findById(docId);
         if (docOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
-        
+
         DocumentEntity doc = docOpt.get();
-        
         if ("APPROVE".equalsIgnoreCase(action)) {
-            // 更新状态
             doc.setStatus(DocumentStatus.APPROVED);
             documentRepository.save(doc);
+            documentProcessingTracker.recordReview(doc, true);
             String taskId = startProcessing(doc);
             return ResponseEntity.ok(Map.of("message", "文档审核通过，开始处理。", "taskId", taskId));
-
-        } else if ("REJECT".equalsIgnoreCase(action)) {
-            // 删除物理文件以节省空间
+        }
+        if ("REJECT".equalsIgnoreCase(action)) {
             try {
                 Path fileToDelete = Path.of(doc.getStoredPath());
                 Files.deleteIfExists(fileToDelete);
-                // 可选：如果父目录为空则删除
-                // Files.deleteIfExists(fileToDelete.getParent());
             } catch (Exception e) {
-                // 打印警告但继续更新状态
-                System.err.println("删除被拒绝文件失败: " + e.getMessage());
+                System.err.println("删除被拒绝的文件失败: " + e.getMessage());
             }
 
             doc.setStatus(DocumentStatus.REJECTED);
             documentRepository.save(doc);
-            return ResponseEntity.ok(Map.of("message", "文档已拒绝并删除文件。"));
-        } else {
-            return ResponseEntity.badRequest().body("无效操作。请使用 APPROVE 或 REJECT。");
+            documentProcessingTracker.recordReview(doc, false);
+            return ResponseEntity.ok(Map.of("message", "文档已拒绝并删除原文件。"));
         }
+        return ResponseEntity.badRequest().body("无效操作，请使用 APPROVE 或 REJECT。");
     }
 
-    // 启动文档处理流程
+    @GetMapping("/chunk-settings")
+    @Operation(summary = "获取切片参数", description = "返回当前运行时的切片目标长度和重叠长度。")
+    public ChunkSettingsResponse getChunkSettings() {
+        return new ChunkSettingsResponse(
+                parsingService.getChunkSize(),
+                parsingService.getChunkOverlap(),
+                parsingService.getDefaultChunkSize(),
+                parsingService.getDefaultChunkOverlap()
+        );
+    }
+
+    @PatchMapping("/chunk-settings")
+    @Operation(summary = "更新切片参数", description = "动态调整后续文档处理使用的切片目标长度和重叠长度。")
+    public ChunkSettingsResponse updateChunkSettings(@RequestBody ChunkSettingsRequest request) {
+        int chunkSize = request.chunkSize() != null ? request.chunkSize() : parsingService.getChunkSize();
+        int overlap = request.overlap() != null ? request.overlap() : parsingService.getChunkOverlap();
+        parsingService.updateChunkSettings(chunkSize, overlap);
+        return getChunkSettings();
+    }
+
     private String startProcessing(DocumentEntity doc) {
         var task = taskService.create(TaskType.INDEXING);
         task.setTargetId(doc.getId());
@@ -177,107 +191,132 @@ public class KnowledgeController {
             try {
                 processDocument(doc, task);
             } catch (Exception e) {
-                var t = taskService.find(task.getTaskId()).orElseThrow();
-                t.fail("处理失败: " + e.getMessage());
-                taskService.save(t);
+                var currentTask = taskService.find(task.getTaskId()).orElseThrow();
+                currentTask.fail("处理失败: " + e.getMessage());
+                taskService.save(currentTask);
                 doc.setStatus(DocumentStatus.FAILED);
                 doc.setErrorMessage(e.getMessage());
                 documentRepository.save(doc);
+                documentProcessingTracker.markFailed(doc, ProcessingStep.COMPLETE, "处理失败: " + e.getMessage());
             }
         });
 
         return task.getTaskId();
     }
 
-    // 判断是否自动审核通过
     private boolean shouldAutoApprove(String metadataJson) {
-        if (metadataJson == null || metadataJson.isBlank()) return false;
+        if (metadataJson == null || metadataJson.isBlank()) {
+            return false;
+        }
         try {
             JsonNode root = objectMapper.readTree(metadataJson);
             String role = root.path("role").asText("");
             boolean isAdmin = root.path("isAdmin").asBoolean(false);
             String source = root.path("source").asText("");
-            return isAdmin || "ADMIN".equalsIgnoreCase(role) || "admin".equalsIgnoreCase(role) || "admin_upload".equalsIgnoreCase(source);
+            return isAdmin
+                    || "ADMIN".equalsIgnoreCase(role)
+                    || "admin".equalsIgnoreCase(role)
+                    || "admin_upload".equalsIgnoreCase(source);
         } catch (Exception e) {
             return false;
         }
     }
 
-    // 审核通过后处理文档的辅助方法
     private void processDocument(DocumentEntity doc, TaskEntity task) {
-         var t = taskService.find(task.getTaskId()).orElseThrow();
-         t.start();
-         taskService.save(t);
-         
-         try {
-             Path storedPath = Path.of(doc.getStoredPath());
-             boolean isJsonl = doc.getOriginalFilename().toLowerCase().endsWith(".jsonl");
-             
-             if (isJsonl) {
-                 var metas = indexingService.indexJsonl(storedPath, defaultEmbedBatch());
-                 
-                 // 对于 JSONL，可能会有多个文档定义
-                 for (var m : metas) {
-                     String docId = m.docId();
-                     if (docId == null || docId.isBlank()) continue;
-                     
-                     // 如果 jsonl 定义的文档与上传 ID 匹配，则更新状态
-                     if (docId.equals(doc.getId())) {
-                         doc.setStatus(DocumentStatus.INDEXED);
-                         documentRepository.save(doc);
-                     } else {
-                         // 否则可根据需要创建/更新其他文档（批量导入场景）
-                         var subDoc = documentRepository.findById(docId).orElse(new DocumentEntity());
-                         subDoc.setId(docId);
-                         subDoc.setStatus(DocumentStatus.INDEXED);
-                         documentRepository.save(subDoc);
-                     }
-                 }
-                 // 如果主文档未被标记为已索引，则补充标记
-                 if (!DocumentStatus.INDEXED.equals(doc.getStatus())) {
-                     doc.setStatus(DocumentStatus.INDEXED);
-                     documentRepository.save(doc);
-                 }
-             } else {
-                 // 1. 标记为解析中
-                 doc.setStatus(DocumentStatus.PARSING);
-                 documentRepository.save(doc);
-                 
-                 // 2. 解析内容
-                 String content = parsingService.parse(storedPath);
-                 
-                 // 3. 分块
-                 var chunks = parsingService.chunkDocument(doc.getId(), content, doc.getOriginalFilename(), doc.getStoredPath());
-                 
-                 // 4. 索引分块
-                 var metas = indexingService.indexDocumentChunks(chunks, defaultEmbedBatch());
-                 
-                 // 5. 更新状态
-                 doc.setStatus(DocumentStatus.INDEXED);
-                 documentRepository.save(doc);
-             }
-             
-             t.setTargetId(doc.getId());
-             t.succeed();
-             taskService.save(t);
-         } catch (Exception e) {
-             t.fail(e.getMessage());
-             taskService.save(t);
+        var currentTask = taskService.find(task.getTaskId()).orElseThrow();
+        currentTask.start();
+        taskService.save(currentTask);
+
+        try {
+            Path storedPath = Path.of(doc.getStoredPath());
+            boolean isJsonl = doc.getOriginalFilename().toLowerCase().endsWith(".jsonl");
+            boolean isWord = documentProcessingTracker.isWordDocument(doc);
+
+            if (isJsonl) {
+                documentProcessingTracker.markSkipped(doc, ProcessingStep.PARSE, "JSONL 导入跳过原文解析", Map.of("supported", false));
+                documentProcessingTracker.markSkipped(doc, ProcessingStep.CHUNK, "JSONL 导入跳过切片预览", Map.of("supported", false));
+                documentProcessingTracker.markRunning(doc, ProcessingStep.EMBED, "开始处理 JSONL 向量化");
+                var metas = indexingService.indexJsonl(storedPath, defaultEmbedBatch());
+                documentProcessingTracker.markSuccess(doc, ProcessingStep.EMBED, "JSONL 向量化完成", Map.of("batchSize", defaultEmbedBatch()));
+                documentProcessingTracker.markSuccess(doc, ProcessingStep.INDEX_QDRANT, "Qdrant 写入完成", Map.of("documentCount", metas.size()));
+                documentProcessingTracker.markSuccess(doc, ProcessingStep.INDEX_ES, "Elasticsearch 写入完成", Map.of("documentCount", metas.size()));
+
+                for (var meta : metas) {
+                    String docId = meta.docId();
+                    if (docId == null || docId.isBlank()) {
+                        continue;
+                    }
+                    if (docId.equals(doc.getId())) {
+                        doc.setStatus(DocumentStatus.INDEXED);
+                        documentRepository.save(doc);
+                    } else {
+                        var subDoc = documentRepository.findById(docId).orElse(new DocumentEntity());
+                        subDoc.setId(docId);
+                        subDoc.setStatus(DocumentStatus.INDEXED);
+                        documentRepository.save(subDoc);
+                    }
+                }
+
+                if (!DocumentStatus.INDEXED.equals(doc.getStatus())) {
+                    doc.setStatus(DocumentStatus.INDEXED);
+                    documentRepository.save(doc);
+                }
+            } else {
+                doc.setStatus(DocumentStatus.PARSING);
+                documentRepository.save(doc);
+
+                documentProcessingTracker.markRunning(doc, ProcessingStep.PARSE, "开始解析文档内容");
+                String content = parsingService.parse(storedPath);
+                documentProcessingTracker.markSuccess(
+                        doc,
+                        ProcessingStep.PARSE,
+                        isWord ? "Word 文本解析完成" : "文档文本解析完成",
+                        Map.of("contentLength", content != null ? content.length() : 0, "supported", isWord)
+                );
+
+                List<JsonNode> chunks = parsingService.chunkDocument(doc.getId(), content, doc.getOriginalFilename(), doc.getStoredPath());
+                if (isWord) {
+                    documentProcessingTracker.markRunning(doc, ProcessingStep.CHUNK, "开始生成切片");
+                    documentProcessingTracker.markSuccess(doc, ProcessingStep.CHUNK, "Word 切片生成完成", buildChunkPayload(chunks));
+                } else {
+                    documentProcessingTracker.markSkipped(
+                            doc,
+                            ProcessingStep.CHUNK,
+                            "PDF 切片可视化暂未开放，当前仅保留状态占位",
+                            Map.of("supported", false)
+                    );
+                }
+
+                documentProcessingTracker.markRunning(doc, ProcessingStep.EMBED, "开始生成向量并写入索引");
+                var metas = indexingService.indexDocumentChunks(chunks, defaultEmbedBatch());
+                documentProcessingTracker.markSuccess(doc, ProcessingStep.EMBED, "向量生成完成", Map.of("chunkCount", chunks.size()));
+                documentProcessingTracker.markSuccess(doc, ProcessingStep.INDEX_QDRANT, "Qdrant 写入完成", Map.of("documentCount", metas.size()));
+                documentProcessingTracker.markSuccess(doc, ProcessingStep.INDEX_ES, "Elasticsearch 写入完成", Map.of("documentCount", metas.size()));
+
+                doc.setStatus(DocumentStatus.INDEXED);
+                documentRepository.save(doc);
+            }
+
+            currentTask.setTargetId(doc.getId());
+            currentTask.succeed();
+            taskService.save(currentTask);
+            documentProcessingTracker.markSuccess(doc, ProcessingStep.COMPLETE, "文档处理完成", Map.of("status", doc.getStatus().name()));
+        } catch (Exception e) {
+            currentTask.fail(e.getMessage());
+            taskService.save(currentTask);
             doc.setStatus(DocumentStatus.FAILED);
             doc.setErrorMessage(e.getMessage());
             documentRepository.save(doc);
-         }
+            documentProcessingTracker.markFailed(doc, ProcessingStep.COMPLETE, "文档处理失败: " + e.getMessage());
+        }
     }
 
     @GetMapping("/documents")
-        @Operation(
-            summary = "文档列表（分页）",
-            description = "查询本地 documents 表中的逻辑文档列表。docId 与索引 payload 的 doc_id 对齐。"
-        )
+    @Operation(summary = "文档列表", description = "分页查询文档元数据。")
     public PagedResponse<DocumentItem> listDocuments(
-            @Parameter(description = "页码（从 1 开始）")
+            @Parameter(description = "页码，从 1 开始")
             @RequestParam(defaultValue = "1") @Min(1) int page,
-            @Parameter(description = "每页条数（1~100）")
+            @Parameter(description = "每页条数")
             @RequestParam(defaultValue = "10") @Min(1) @Max(100) int pageSize,
             @Parameter(description = "是否包含隐藏文档")
             @RequestParam(defaultValue = "false") boolean includeHidden
@@ -286,17 +325,17 @@ public class KnowledgeController {
         var result = includeHidden ? documentRepository.findAll(pageable) : documentRepository.findByHiddenFalse(pageable);
         var items = result.getContent().stream()
                 .map(d -> new DocumentItem(
-                        d.getDocId(), 
-                d.getOriginalFilename(),
-                d.getDisplayName(),
-                d.getDescription(),
-                        d.getStoredPath(), 
-                        d.getStatus(), 
-                d.getCreatedAt(),
-                d.isHidden(),
-                        d.getFileSize(), 
-                        d.getFileType(), 
-                        d.getChecksum(), 
+                        d.getDocId(),
+                        d.getOriginalFilename(),
+                        d.getDisplayName(),
+                        d.getDescription(),
+                        d.getStoredPath(),
+                        d.getStatus(),
+                        d.getCreatedAt(),
+                        d.isHidden(),
+                        d.getFileSize(),
+                        d.getFileType(),
+                        d.getChecksum(),
                         d.getErrorMessage()
                 ))
                 .toList();
@@ -304,11 +343,8 @@ public class KnowledgeController {
     }
 
     @PatchMapping("/documents/{docId}")
-    @Operation(summary = "更新文档信息", description = "更新文档展示名称、备注或隐藏状态。")
-    public ResponseEntity<DocumentItem> updateDocument(
-            @PathVariable String docId,
-            @RequestBody DocumentUpdateRequest request
-    ) {
+    @Operation(summary = "更新文档信息", description = "更新展示名、备注或隐藏状态。")
+    public ResponseEntity<DocumentItem> updateDocument(@PathVariable String docId, @RequestBody DocumentUpdateRequest request) {
         var docOpt = documentRepository.findById(docId);
         if (docOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
@@ -343,7 +379,7 @@ public class KnowledgeController {
     }
 
     @GetMapping("/documents/{docId}/preview")
-    @Operation(summary = "文档预览", description = "返回文档原文的文本预览，用于前端阅读器展示。")
+    @Operation(summary = "文档预览", description = "返回原文文本预览。")
     public ResponseEntity<DocumentPreviewResponse> previewDocument(@PathVariable String docId) {
         var docOpt = documentRepository.findById(docId);
         if (docOpt.isEmpty()) {
@@ -368,27 +404,91 @@ public class KnowledgeController {
         }
 
         if (content != null && content.length() > 20000) {
-            content = content.substring(0, 20000) + "\n\n...（内容过长已截断）";
+            content = content.substring(0, 20000) + "\n\n...(内容过长，已截断)";
         }
 
         return ResponseEntity.ok(new DocumentPreviewResponse(
                 doc.getDocId(),
                 doc.getOriginalFilename(),
-            doc.getDisplayName(),
-            doc.getDescription(),
+                doc.getDisplayName(),
+                doc.getDescription(),
                 doc.getFileType(),
                 doc.getStatus().name(),
-            doc.getFileSize(),
-            doc.getCreatedAt(),
-            doc.isHidden(),
-            doc.getChecksum(),
+                doc.getFileSize(),
+                doc.getCreatedAt(),
+                doc.isHidden(),
+                doc.getChecksum(),
                 content,
                 errorMessage
         ));
     }
 
+    @GetMapping("/documents/{docId}/processing")
+    @Operation(summary = "文档处理详情", description = "返回处理时间线和处理结果摘要。")
+    public ResponseEntity<DocumentProcessingResponse> processingDetail(@PathVariable String docId) {
+        var docOpt = documentRepository.findById(docId);
+        if (docOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(documentProcessingTracker.buildResponse(docOpt.get()));
+    }
+
+    @GetMapping("/documents/{docId}/chunk-preview")
+    @Operation(summary = "切片预览", description = "基于当前或指定切片参数重新计算 Word 文档切片预览。")
+    public ResponseEntity<ChunkPreviewResponse> chunkPreview(
+            @PathVariable String docId,
+            @RequestParam(required = false) Integer chunkSize,
+            @RequestParam(required = false) Integer overlap
+    ) {
+        var docOpt = documentRepository.findById(docId);
+        if (docOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        DocumentEntity doc = docOpt.get();
+        if (!documentProcessingTracker.isWordDocument(doc)) {
+            return ResponseEntity.ok(new ChunkPreviewResponse(
+                    docId,
+                    false,
+                    "当前仅支持 Word 文档切片预览，PDF 先展示状态占位。",
+                    new ChunkStats(0, null, overlap, chunkSize),
+                    List.of()
+            ));
+        }
+
+        int resolvedChunkSize = chunkSize != null ? chunkSize : parsingService.getChunkSize();
+        int resolvedOverlap = overlap != null ? overlap : parsingService.getChunkOverlap();
+
+        try {
+            String content = parsingService.parse(Path.of(doc.getStoredPath()));
+            List<JsonNode> chunks = parsingService.chunkDocument(
+                    doc.getId(),
+                    content,
+                    doc.getOriginalFilename(),
+                    doc.getStoredPath(),
+                    resolvedChunkSize,
+                    resolvedOverlap
+            );
+            return ResponseEntity.ok(new ChunkPreviewResponse(
+                    docId,
+                    true,
+                    "已根据当前参数重新生成切片预览。",
+                    buildChunkStats(chunks, resolvedChunkSize, resolvedOverlap),
+                    chunks.stream().map(this::toChunkPreviewItem).toList()
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.ok(new ChunkPreviewResponse(
+                    docId,
+                    true,
+                    "切片预览生成失败: " + e.getMessage(),
+                    new ChunkStats(0, null, resolvedOverlap, resolvedChunkSize),
+                    List.of()
+            ));
+        }
+    }
+
     @GetMapping("/documents/{docId}/download")
-    @Operation(summary = "下载文档", description = "下载文档原始文件。")
+    @Operation(summary = "下载文档", description = "下载原始文件。")
     public ResponseEntity<FileSystemResource> downloadDocument(@PathVariable String docId) {
         var docOpt = documentRepository.findById(docId);
         if (docOpt.isEmpty()) {
@@ -409,110 +509,141 @@ public class KnowledgeController {
     }
 
     @DeleteMapping("/documents/{docId}")
-        @Operation(
-            summary = "删除文档（异步）",
-            description = "按 docId（即 payload.doc_id）同步删除 Elasticsearch 与 Qdrant 中的相关数据，并删除本地 documents 记录；返回 taskId 查询任务状态。"
-        )
-        public UploadResponse deleteDocument(
-            @Parameter(description = "逻辑文档 ID（等同于索引 payload 的 doc_id）")
-            @PathVariable String docId
-        ) {
+    @Operation(summary = "删除文档", description = "异步删除 Elasticsearch、Qdrant 和本地记录。")
+    public UploadResponse deleteDocument(@PathVariable String docId) {
         var task = taskService.create(TaskType.DELETE_DOCUMENT);
         taskService.runAsync(task.getTaskId(), () -> {
-            var t = taskService.find(task.getTaskId()).orElseThrow();
-            t.start();
-            taskService.save(t);
+            var currentTask = taskService.find(task.getTaskId()).orElseThrow();
+            currentTask.start();
+            taskService.save(currentTask);
             try {
-                t.setProgress(30);
-                taskService.save(t);
+                currentTask.setProgress(30);
+                taskService.save(currentTask);
 
-                // docId 在本系统中等同于 payload 的 doc_id
                 elasticsearchClient.deleteByDocId(docId);
                 qdrantClient.deleteByDocId(docId);
-                t.setProgress(60);
-                taskService.save(t);
+                currentTask.setProgress(60);
+                taskService.save(currentTask);
 
                 documentRepository.deleteById(Objects.requireNonNull(docId, "docId"));
-                t.succeed();
-                taskService.save(t);
+                currentTask.succeed();
+                taskService.save(currentTask);
             } catch (Exception e) {
-                t.fail(e.getMessage());
-                taskService.save(t);
+                currentTask.fail(e.getMessage());
+                taskService.save(currentTask);
             }
         });
         return new UploadResponse(task.getTaskId(), docId, "processing", "删除任务已启动。");
     }
 
     @PostMapping("/rebuild")
-        @Operation(
-            summary = "重建索引（异步）",
-            description = "从配置的 sourceJsonlPath 重新导入数据，可选重建 ES/Qdrant。返回 taskId 查询进度与结果。"
-        )
+    @Operation(summary = "重建索引", description = "从配置的 JSONL 重新导入数据。")
     public UploadResponse rebuild(@RequestBody(required = false) RebuildRequest req) {
         var task = taskService.create(TaskType.REBUILD);
         taskService.runAsync(task.getTaskId(), () -> {
-            var t = taskService.find(task.getTaskId()).orElseThrow();
-            t.start();
-            taskService.save(t);
+            var currentTask = taskService.find(task.getTaskId()).orElseThrow();
+            currentTask.start();
+            taskService.save(currentTask);
             try {
                 var path = Path.of(appProperties.indexing().sourceJsonlPath()).normalize();
                 boolean rebuildEs = req == null || req.rebuildEs() == null || req.rebuildEs();
                 boolean rebuildQdrant = req == null || req.rebuildQdrant() == null || req.rebuildQdrant();
-                // reEmbed 暂不区分：当前后端入库默认都会向量化并写入 Qdrant
 
                 var metas = indexingService.rebuildFromJsonl(path, defaultEmbedBatch(), rebuildEs, rebuildQdrant);
-                // rebuild 后同步刷新 documents 表（以 JSONL 内的 doc_id 为准）
-                for (var m : metas) {
-                    String docId = m.docId();
-                    if (docId == null || docId.isBlank()) continue;
+                for (var meta : metas) {
+                    String docId = meta.docId();
+                    if (docId == null || docId.isBlank()) {
+                        continue;
+                    }
                     var doc = documentRepository.findById(docId)
                             .orElseGet(() -> new DocumentEntity(
-                            docId,
-                                    m.title() != null ? m.title() : (m.source() != null ? m.source() : "unknown"),
-                                    m.source() != null ? m.source() : path.toString().replace("\\", "/"),
+                                    docId,
+                                    meta.title() != null ? meta.title() : (meta.source() != null ? meta.source() : "unknown"),
+                                    meta.source() != null ? meta.source() : path.toString().replace("\\", "/"),
                                     null
                             ));
                     doc.updateBasicInfo(
-                            m.title() != null ? m.title() : doc.getOriginalFilename(),
-                            m.source() != null ? m.source() : doc.getStoredPath(),
+                            meta.title() != null ? meta.title() : doc.getOriginalFilename(),
+                            meta.source() != null ? meta.source() : doc.getStoredPath(),
                             doc.getMetadataJson()
                     );
                     doc.setStatus(DocumentStatus.INDEXED);
                     documentRepository.save(doc);
                 }
-                t.succeed();
-                taskService.save(t);
+                currentTask.succeed();
+                taskService.save(currentTask);
             } catch (Exception e) {
-                t.fail(e.getMessage());
-                taskService.save(t);
+                currentTask.fail(e.getMessage());
+                taskService.save(currentTask);
             }
         });
         return new UploadResponse(task.getTaskId(), null, "processing", "重建任务已启动。");
     }
 
     @GetMapping("/tasks/{taskId}")
-        @Operation(summary = "查询任务状态", description = "查询上传/删除/重建等异步任务的状态、进度、错误信息与时间戳。")
-        public TaskStatusResponse getTask(
-            @Parameter(description = "任务 ID")
-            @PathVariable String taskId
-        ) {
-        var t = taskService.find(taskId).orElseThrow();
+    @Operation(summary = "查询任务状态", description = "返回异步任务的进度和状态。")
+    public TaskStatusResponse getTask(@PathVariable String taskId) {
+        var task = taskService.find(taskId).orElseThrow();
         return new TaskStatusResponse(
-                t.getTaskId(),
-                t.getType(),
-                t.getStatus(),
-                t.getProgress(),
-                t.getErrorMessage(),
-                t.getCreatedAt(),
-                t.getStartedAt(),
-                t.getFinishedAt()
+                task.getTaskId(),
+                task.getType(),
+                task.getStatus(),
+                task.getProgress(),
+                task.getErrorMessage(),
+                task.getCreatedAt(),
+                task.getStartedAt(),
+                task.getFinishedAt()
         );
     }
 
-    // 获取默认的向量化批处理大小
     private int defaultEmbedBatch() {
-        var n = appProperties.indexing().embedBatchSize();
-        if (n == null || n <= 0) return 64;
-        return Math.min(n, 128);
+        var batch = appProperties.indexing().embedBatchSize();
+        if (batch == null || batch <= 0) {
+            return 64;
+        }
+        return Math.min(batch, 128);
+    }
+
+    private Map<String, Object> buildChunkPayload(List<JsonNode> chunks) {
+        ChunkStats stats = buildChunkStats(chunks, parsingService.getChunkSize(), parsingService.getChunkOverlap());
+        return Map.of(
+                "chunkStats", Map.of(
+                        "totalChunks", stats.totalChunks(),
+                        "averageLength", stats.averageLength(),
+                        "overlap", stats.overlap(),
+                        "chunkSize", stats.chunkSize()
+                ),
+                "chunkPreview", chunks.stream().map(this::toChunkPreviewMap).toList()
+        );
+    }
+
+    private ChunkStats buildChunkStats(List<JsonNode> chunks, int chunkSize, int overlap) {
+        int totalLength = chunks.stream().mapToInt(chunk -> chunk.path("content").asText("").length()).sum();
+        int averageLength = chunks.isEmpty() ? 0 : totalLength / chunks.size();
+        return new ChunkStats(chunks.size(), averageLength, overlap, chunkSize);
+    }
+
+    private ChunkPreviewItem toChunkPreviewItem(JsonNode chunk) {
+        Integer pageNum = chunk.has("page_num") && chunk.get("page_num").canConvertToInt() ? chunk.get("page_num").asInt() : null;
+        return new ChunkPreviewItem(
+                chunk.path("chunk_id").asText(),
+                chunk.path("chunk_index").asInt(),
+                pageNum,
+                chunk.path("content").asText("").length(),
+                chunk.path("title").asText(""),
+                chunk.path("content").asText("")
+        );
+    }
+
+    private Map<String, Object> toChunkPreviewMap(JsonNode chunk) {
+        ChunkPreviewItem item = toChunkPreviewItem(chunk);
+        return Map.of(
+                "chunkId", item.chunkId(),
+                "chunkIndex", item.chunkIndex(),
+                "pageNum", item.pageNum() == null ? "" : item.pageNum(),
+                "length", item.length(),
+                "title", item.title() == null ? "" : item.title(),
+                "content", item.content()
+        );
     }
 }

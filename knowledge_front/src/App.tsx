@@ -1,19 +1,20 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Navbar from './components/layout/Navbar';
 import HeroInput from './components/search/HeroInput';
 import AIPanel from './components/results/AIPanel';
 import SourceBar from './components/results/SourceBar';
 import Documents from './components/documents/Documents';
+import ProcessingCenter from './components/processing/ProcessingCenter';
 import AdminDashboard from './components/admin/AdminDashboard';
 import FilePreviewDrawer from './components/layout/FilePreviewDrawer';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, FolderUp } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 
 function App() {
-  const [view, setView] = useState<'home' | 'result' | 'documents' | 'admin'>(() => {
+  const [view, setView] = useState<'home' | 'result' | 'documents' | 'processing' | 'admin'>(() => {
     try {
       const saved = window.localStorage.getItem('czj_view');
-      if (saved === 'home' || saved === 'result' || saved === 'documents' || saved === 'admin') {
+      if (saved === 'home' || saved === 'result' || saved === 'documents' || saved === 'processing' || saved === 'admin') {
         return saved;
       }
       return 'home';
@@ -29,6 +30,7 @@ function App() {
   const [complete, setComplete] = useState(false);
   const [sources, setSources] = useState<Array<{ id: string; title: string; summary: string; score: number; docId?: string; fileType?: string; pageStart?: number | null; pageEnd?: number | null }>>([]);
   const [docTitleMap, setDocTitleMap] = useState<Record<string, string>>({});
+  const [processingFocusDocId, setProcessingFocusDocId] = useState<string | null>(null);
 
   const stripExtension = (name: string) => {
     if (!name) return name;
@@ -252,7 +254,29 @@ function App() {
                transition={{ duration: 0.3 }}
                className="w-full"
              >
-               <Documents onOpenPreview={(docId, title) => setPreviewDoc({ docId, title, citation: '' })} />
+               <Documents
+                 onOpenPreview={(docId, title) => setPreviewDoc({ docId, title, citation: '' })}
+                 onOpenProcessing={(docId) => {
+                   setProcessingFocusDocId(docId);
+                   setView('processing');
+                 }}
+               />
+             </motion.div>
+          )}
+
+          {view === 'processing' && (
+             <motion.div
+               key="processing"
+               initial={{ opacity: 0, x: 20 }}
+               animate={{ opacity: 1, x: 0 }}
+               exit={{ opacity: 0, x: -20 }}
+               transition={{ duration: 0.3 }}
+               className="w-full"
+             >
+               <ProcessingCenter
+                 focusDocId={processingFocusDocId}
+                 onConsumeFocus={() => setProcessingFocusDocId(null)}
+               />
              </motion.div>
           )}
 

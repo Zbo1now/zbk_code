@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Lightbulb, CheckCircle2, Copy, AlertTriangle, FileQuestion } from 'lucide-react';
+import { Lightbulb, CheckCircle2, Copy, FileQuestion } from 'lucide-react';
 
 interface AIPanelProps {
   answer: string;
@@ -23,7 +23,7 @@ const AIPanel: React.FC<AIPanelProps> = ({ answer, loading, complete, sources, o
       return;
     }
     
-    let interval: NodeJS.Timeout;
+    let interval: ReturnType<typeof setInterval> | undefined;
     
     if (answer.length > displayedText.length) {
       interval = setInterval(() => {
