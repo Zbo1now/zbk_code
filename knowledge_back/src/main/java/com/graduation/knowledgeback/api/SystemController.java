@@ -4,6 +4,7 @@ import com.graduation.knowledgeback.api.dto.SystemStatusResponse;
 import com.graduation.knowledgeback.client.ElasticsearchClient;
 import com.graduation.knowledgeback.client.ModelServiceClient;
 import com.graduation.knowledgeback.client.QdrantClient;
+import com.graduation.knowledgeback.service.PermissionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,11 +18,18 @@ public class SystemController {
     private final ElasticsearchClient elasticsearchClient;
     private final QdrantClient qdrantClient;
     private final ModelServiceClient modelServiceClient;
+    private final PermissionService permissionService;
 
-    public SystemController(ElasticsearchClient elasticsearchClient, QdrantClient qdrantClient, ModelServiceClient modelServiceClient) {
+    public SystemController(
+            ElasticsearchClient elasticsearchClient,
+            QdrantClient qdrantClient,
+            ModelServiceClient modelServiceClient,
+            PermissionService permissionService
+    ) {
         this.elasticsearchClient = elasticsearchClient;
         this.qdrantClient = qdrantClient;
         this.modelServiceClient = modelServiceClient;
+        this.permissionService = permissionService;
     }
 
     @GetMapping("/status")
@@ -30,6 +38,7 @@ public class SystemController {
             description = "返回 ES 集群健康状态、Qdrant collection 点数量、模型服务 rerank 模型信息（如果可用）。"
         )
     public SystemStatusResponse status() {
+        permissionService.requirePermission("system.manage");
         String es = "unknown";
         Integer indexCount = null;
         Integer nodeCount = null;

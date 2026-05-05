@@ -6,4 +6,5 @@ import java.util.List;
 
 public interface UserPermissionGrantRepository extends JpaRepository<UserPermissionGrantEntity, Long> {
     List<UserPermissionGrantEntity> findByUserIdAndStatus(Long userId, String status);
+    List<UserPermissionGrantEntity> findByUserId(Long userId);
 }

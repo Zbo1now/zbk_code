@@ -12,8 +12,11 @@ import com.graduation.knowledgeback.domain.TaskType;
 import com.graduation.knowledgeback.persistence.DocumentEntity;
 import com.graduation.knowledgeback.persistence.DocumentRepository;
 import com.graduation.knowledgeback.persistence.TaskEntity;
+import com.graduation.knowledgeback.service.AuthContextHolder;
+import com.graduation.knowledgeback.service.AuthenticatedUser;
 import com.graduation.knowledgeback.service.DocumentProcessingTracker;
 import com.graduation.knowledgeback.service.IndexingService;
+import com.graduation.knowledgeback.service.PermissionService;
 import com.graduation.knowledgeback.service.ParsingService;
 import com.graduation.knowledgeback.service.TaskService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -51,6 +54,7 @@ public class KnowledgeController {
     private final QdrantClient qdrantClient;
     private final ObjectMapper objectMapper;
     private final DocumentProcessingTracker documentProcessingTracker;
+    private final PermissionService permissionService;
 
     public KnowledgeController(
             DocumentRepository documentRepository,
@@ -61,7 +65,8 @@ public class KnowledgeController {
             ElasticsearchClient elasticsearchClient,
             QdrantClient qdrantClient,
             ObjectMapper objectMapper,
-            DocumentProcessingTracker documentProcessingTracker
+            DocumentProcessingTracker documentProcessingTracker,
+            PermissionService permissionService
     ) {
         this.documentRepository = documentRepository;
         this.taskService = taskService;
@@ -72,6 +77,7 @@ public class KnowledgeController {
         this.qdrantClient = qdrantClient;
         this.objectMapper = objectMapper;
         this.documentProcessingTracker = documentProcessingTracker;
+        this.permissionService = permissionService;
     }
 
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -81,6 +87,8 @@ public class KnowledgeController {
             @Parameter(description = "可选 JSON 元数据")
             @RequestPart(value = "metadata", required = false) String metadataJson
     ) throws Exception {
+        permissionService.requirePermission("kb.upload");
+        AuthenticatedUser currentUser = AuthContextHolder.require();
         String uploadId = UUID.randomUUID().toString();
         String originalFilename = file.getOriginalFilename();
         if (originalFilename == null || originalFilename.isBlank()) {
@@ -115,8 +123,9 @@ public class KnowledgeController {
         doc.setFileType(fileType);
         doc.setChecksum(checksum);
         doc.setUploadTime(java.time.LocalDateTime.now());
+        doc.setUploadedBy(AuthContextHolder.require().userId());
 
-        boolean autoApprove = shouldAutoApprove(metadataJson);
+        boolean autoApprove = shouldAutoApprove(currentUser);
         doc.setStatus(autoApprove ? DocumentStatus.APPROVED : DocumentStatus.PENDING_REVIEW);
         documentRepository.save(doc);
 
@@ -133,6 +142,7 @@ public class KnowledgeController {
     @PostMapping("/documents/{docId}/review")
     @Operation(summary = "审核文档", description = "管理员审核通过后开始处理，拒绝则保留状态记录。")
     public ResponseEntity<?> reviewDocument(@PathVariable String docId, @RequestParam String action) {
+        permissionService.requirePermission("doc.review");
         var docOpt = documentRepository.findById(docId);
         if (docOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
@@ -141,6 +151,8 @@ public class KnowledgeController {
         DocumentEntity doc = docOpt.get();
         if ("APPROVE".equalsIgnoreCase(action)) {
             doc.setStatus(DocumentStatus.APPROVED);
+            doc.setReviewedBy(AuthContextHolder.require().userId());
+            doc.setReviewedAt(java.time.Instant.now());
             documentRepository.save(doc);
             documentProcessingTracker.recordReview(doc, true);
             String taskId = startProcessing(doc);
@@ -155,6 +167,8 @@ public class KnowledgeController {
             }
 
             doc.setStatus(DocumentStatus.REJECTED);
+            doc.setReviewedBy(AuthContextHolder.require().userId());
+            doc.setReviewedAt(java.time.Instant.now());
             documentRepository.save(doc);
             documentProcessingTracker.recordReview(doc, false);
             return ResponseEntity.ok(Map.of("message", "文档已拒绝并删除原文件。"));
@@ -165,6 +179,7 @@ public class KnowledgeController {
     @GetMapping("/chunk-settings")
     @Operation(summary = "获取切片参数", description = "返回当前运行时的切片目标长度和重叠长度。")
     public ChunkSettingsResponse getChunkSettings() {
+        permissionService.requirePermission("system.manage");
         return new ChunkSettingsResponse(
                 parsingService.getChunkSize(),
                 parsingService.getChunkOverlap(),
@@ -176,6 +191,7 @@ public class KnowledgeController {
     @PatchMapping("/chunk-settings")
     @Operation(summary = "更新切片参数", description = "动态调整后续文档处理使用的切片目标长度和重叠长度。")
     public ChunkSettingsResponse updateChunkSettings(@RequestBody ChunkSettingsRequest request) {
+        permissionService.requirePermission("system.manage");
         int chunkSize = request.chunkSize() != null ? request.chunkSize() : parsingService.getChunkSize();
         int overlap = request.overlap() != null ? request.overlap() : parsingService.getChunkOverlap();
         parsingService.updateChunkSettings(chunkSize, overlap);
@@ -204,22 +220,8 @@ public class KnowledgeController {
         return task.getTaskId();
     }
 
-    private boolean shouldAutoApprove(String metadataJson) {
-        if (metadataJson == null || metadataJson.isBlank()) {
-            return false;
-        }
-        try {
-            JsonNode root = objectMapper.readTree(metadataJson);
-            String role = root.path("role").asText("");
-            boolean isAdmin = root.path("isAdmin").asBoolean(false);
-            String source = root.path("source").asText("");
-            return isAdmin
-                    || "ADMIN".equalsIgnoreCase(role)
-                    || "admin".equalsIgnoreCase(role)
-                    || "admin_upload".equalsIgnoreCase(source);
-        } catch (Exception e) {
-            return false;
-        }
+    private boolean shouldAutoApprove(AuthenticatedUser currentUser) {
+        return currentUser != null && currentUser.isAdmin();
     }
 
     private void processDocument(DocumentEntity doc, TaskEntity task) {
@@ -274,10 +276,18 @@ public class KnowledgeController {
                         Map.of("contentLength", content != null ? content.length() : 0, "supported", isWord)
                 );
 
-                List<JsonNode> chunks = parsingService.chunkDocument(doc.getId(), content, doc.getOriginalFilename(), doc.getStoredPath());
+                ChunkSettingSnapshot chunkSettingSnapshot = resolveChunkSettings(doc);
+                List<JsonNode> chunks = parsingService.chunkDocument(
+                        doc.getId(),
+                        content,
+                        doc.getOriginalFilename(),
+                        doc.getStoredPath(),
+                        chunkSettingSnapshot.chunkSize(),
+                        chunkSettingSnapshot.overlap()
+                );
                 if (isWord) {
                     documentProcessingTracker.markRunning(doc, ProcessingStep.CHUNK, "开始生成切片");
-                    documentProcessingTracker.markSuccess(doc, ProcessingStep.CHUNK, "Word 切片生成完成", buildChunkPayload(chunks));
+                    documentProcessingTracker.markSuccess(doc, ProcessingStep.CHUNK, "Word 切片生成完成", buildChunkPayload(chunks, chunkSettingSnapshot.chunkSize(), chunkSettingSnapshot.overlap()));
                 } else {
                     documentProcessingTracker.markSkipped(
                             doc,
@@ -321,6 +331,7 @@ public class KnowledgeController {
             @Parameter(description = "是否包含隐藏文档")
             @RequestParam(defaultValue = "false") boolean includeHidden
     ) {
+        permissionService.requirePermission("kb.view");
         var pageable = PageRequest.of(page - 1, pageSize);
         var result = includeHidden ? documentRepository.findAll(pageable) : documentRepository.findByHiddenFalse(pageable);
         var items = result.getContent().stream()
@@ -345,6 +356,7 @@ public class KnowledgeController {
     @PatchMapping("/documents/{docId}")
     @Operation(summary = "更新文档信息", description = "更新展示名、备注或隐藏状态。")
     public ResponseEntity<DocumentItem> updateDocument(@PathVariable String docId, @RequestBody DocumentUpdateRequest request) {
+        permissionService.requirePermission("kb.manage");
         var docOpt = documentRepository.findById(docId);
         if (docOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
@@ -381,6 +393,7 @@ public class KnowledgeController {
     @GetMapping("/documents/{docId}/preview")
     @Operation(summary = "文档预览", description = "返回原文文本预览。")
     public ResponseEntity<DocumentPreviewResponse> previewDocument(@PathVariable String docId) {
+        permissionService.requirePermission("kb.view");
         var docOpt = documentRepository.findById(docId);
         if (docOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
@@ -426,6 +439,7 @@ public class KnowledgeController {
     @GetMapping("/documents/{docId}/processing")
     @Operation(summary = "文档处理详情", description = "返回处理时间线和处理结果摘要。")
     public ResponseEntity<DocumentProcessingResponse> processingDetail(@PathVariable String docId) {
+        permissionService.requirePermission("kb.view");
         var docOpt = documentRepository.findById(docId);
         if (docOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
@@ -440,6 +454,7 @@ public class KnowledgeController {
             @RequestParam(required = false) Integer chunkSize,
             @RequestParam(required = false) Integer overlap
     ) {
+        permissionService.requirePermission("kb.view");
         var docOpt = documentRepository.findById(docId);
         if (docOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
@@ -490,6 +505,7 @@ public class KnowledgeController {
     @GetMapping("/documents/{docId}/download")
     @Operation(summary = "下载文档", description = "下载原始文件。")
     public ResponseEntity<FileSystemResource> downloadDocument(@PathVariable String docId) {
+        permissionService.requirePermission("kb.view");
         var docOpt = documentRepository.findById(docId);
         if (docOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
@@ -511,6 +527,7 @@ public class KnowledgeController {
     @DeleteMapping("/documents/{docId}")
     @Operation(summary = "删除文档", description = "异步删除 Elasticsearch、Qdrant 和本地记录。")
     public UploadResponse deleteDocument(@PathVariable String docId) {
+        permissionService.requirePermission("kb.manage");
         var task = taskService.create(TaskType.DELETE_DOCUMENT);
         taskService.runAsync(task.getTaskId(), () -> {
             var currentTask = taskService.find(task.getTaskId()).orElseThrow();
@@ -539,6 +556,7 @@ public class KnowledgeController {
     @PostMapping("/rebuild")
     @Operation(summary = "重建索引", description = "从配置的 JSONL 重新导入数据。")
     public UploadResponse rebuild(@RequestBody(required = false) RebuildRequest req) {
+        permissionService.requirePermission("kb.manage");
         var task = taskService.create(TaskType.REBUILD);
         taskService.runAsync(task.getTaskId(), () -> {
             var currentTask = taskService.find(task.getTaskId()).orElseThrow();
@@ -583,6 +601,7 @@ public class KnowledgeController {
     @GetMapping("/tasks/{taskId}")
     @Operation(summary = "查询任务状态", description = "返回异步任务的进度和状态。")
     public TaskStatusResponse getTask(@PathVariable String taskId) {
+        permissionService.requireAuthenticated();
         var task = taskService.find(taskId).orElseThrow();
         return new TaskStatusResponse(
                 task.getTaskId(),
@@ -604,8 +623,8 @@ public class KnowledgeController {
         return Math.min(batch, 128);
     }
 
-    private Map<String, Object> buildChunkPayload(List<JsonNode> chunks) {
-        ChunkStats stats = buildChunkStats(chunks, parsingService.getChunkSize(), parsingService.getChunkOverlap());
+    private Map<String, Object> buildChunkPayload(List<JsonNode> chunks, int chunkSize, int overlap) {
+        ChunkStats stats = buildChunkStats(chunks, chunkSize, overlap);
         return Map.of(
                 "chunkStats", Map.of(
                         "totalChunks", stats.totalChunks(),
@@ -615,6 +634,30 @@ public class KnowledgeController {
                 ),
                 "chunkPreview", chunks.stream().map(this::toChunkPreviewMap).toList()
         );
+    }
+
+    private ChunkSettingSnapshot resolveChunkSettings(DocumentEntity doc) {
+        int chunkSize = parsingService.getChunkSize();
+        int overlap = parsingService.getChunkOverlap();
+        String metadataJson = doc.getMetadataJson();
+        if (metadataJson == null || metadataJson.isBlank()) {
+            return new ChunkSettingSnapshot(chunkSize, overlap);
+        }
+
+        try {
+            JsonNode root = objectMapper.readTree(metadataJson);
+            JsonNode chunkSettingsNode = root.path("chunkSettings");
+            if (chunkSettingsNode.has("chunkSize") && chunkSettingsNode.get("chunkSize").canConvertToInt()) {
+                chunkSize = chunkSettingsNode.get("chunkSize").asInt();
+            }
+            if (chunkSettingsNode.has("overlap") && chunkSettingsNode.get("overlap").canConvertToInt()) {
+                overlap = chunkSettingsNode.get("overlap").asInt();
+            }
+        } catch (Exception ignored) {
+            return new ChunkSettingSnapshot(parsingService.getChunkSize(), parsingService.getChunkOverlap());
+        }
+
+        return new ChunkSettingSnapshot(chunkSize, overlap);
     }
 
     private ChunkStats buildChunkStats(List<JsonNode> chunks, int chunkSize, int overlap) {
@@ -645,5 +688,8 @@ public class KnowledgeController {
                 "title", item.title() == null ? "" : item.title(),
                 "content", item.content()
         );
+    }
+
+    private record ChunkSettingSnapshot(int chunkSize, int overlap) {
     }
 }

@@ -3,6 +3,7 @@ package com.graduation.knowledgeback.api;
 import com.graduation.knowledgeback.api.dto.QaRequest;
 import com.graduation.knowledgeback.api.dto.QaResponse;
 import com.graduation.knowledgeback.persistence.QaLogEntity;
+import com.graduation.knowledgeback.service.PermissionService;
 import com.graduation.knowledgeback.service.QaService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -16,9 +17,11 @@ import java.util.List;
 @Tag(name = "问答 QA", description = "检索 + LLM 生成的问答接口")
 public class QaController {
     private final QaService qaService;
+    private final PermissionService permissionService;
 
-    public QaController(QaService qaService) {
+    public QaController(QaService qaService, PermissionService permissionService) {
         this.qaService = qaService;
+        this.permissionService = permissionService;
     }
 
     @PostMapping("/answer")
@@ -30,6 +33,7 @@ public class QaController {
     @GetMapping("/logs")
     @Operation(summary = "查询日志", description = "获取最近的问答日志")
     public List<QaLogEntity> getLogs() {
+        permissionService.requirePermission("system.manage");
         return qaService.getLogs();
     }
 }

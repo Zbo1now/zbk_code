@@ -54,3 +54,6 @@ app:
     baseUrl: https://api.siliconflow.cn/v1
     apiKey: ${DEEPSEEK_API_KEY:}
     model: deepseek-ai/DeepSeek-V3
+  auth:
+    tokenSecret: ${APP_AUTH_TOKEN_SECRET:change-this-secret-in-production}
+    tokenTtlSeconds: 43200

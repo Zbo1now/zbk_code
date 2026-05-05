@@ -6,6 +6,7 @@ import com.graduation.knowledgeback.api.dto.SingleSearchRequest;
 import com.graduation.knowledgeback.api.dto.SingleSearchResponse;
 import com.graduation.knowledgeback.persistence.SearchLogEntity;
 import com.graduation.knowledgeback.persistence.SearchLogRepository;
+import com.graduation.knowledgeback.service.PermissionService;
 import com.graduation.knowledgeback.service.SearchService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -20,15 +21,22 @@ import java.util.List;
 public class SearchController {
     private final SearchService searchService;
     private final SearchLogRepository searchLogRepository;
+    private final PermissionService permissionService;
 
-    public SearchController(SearchService searchService, SearchLogRepository searchLogRepository) {
+    public SearchController(
+            SearchService searchService,
+            SearchLogRepository searchLogRepository,
+            PermissionService permissionService
+    ) {
         this.searchService = searchService;
         this.searchLogRepository = searchLogRepository;
+        this.permissionService = permissionService;
     }
 
     @GetMapping("/logs")
     @Operation(summary = "获取检索日志", description = "返回最近的检索性能日志")
     public List<SearchLogEntity> getLogs() {
+        permissionService.requirePermission("system.manage");
         return searchLogRepository.findAllByOrderByCreatedAtDesc();
     }
 

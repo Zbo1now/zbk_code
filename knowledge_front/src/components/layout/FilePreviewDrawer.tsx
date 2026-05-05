@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, FileText, Download, Share2, AlertCircle } from 'lucide-react';
+import { authFetch } from '../../utils/auth';
 
 interface FilePreviewDrawerProps {
   isOpen: boolean;
@@ -28,6 +29,25 @@ const FilePreviewDrawer: React.FC<FilePreviewDrawerProps> = ({ isOpen, onClose, 
     originalFilename?: string | null;
   } | null>(null);
 
+  const handleDownload = async () => {
+    if (!docId) return;
+    try {
+      const res = await authFetch(`/api/v1/knowledge/documents/${docId}/download`);
+      if (!res.ok) throw new Error('download failed');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = previewMeta?.originalFilename || fileTitle || 'document';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '下载失败');
+    }
+  };
+
   const statusLabel = (value?: string | null) => {
     switch (value) {
       case 'PENDING_REVIEW':
@@ -53,7 +73,7 @@ const FilePreviewDrawer: React.FC<FilePreviewDrawerProps> = ({ isOpen, onClose, 
     if (!isOpen || !docId) return;
     setLoading(true);
     setError(null);
-    fetch(`/api/v1/knowledge/documents/${docId}/preview`)
+    authFetch(`/api/v1/knowledge/documents/${docId}/preview`)
       .then(async (res) => {
         if (!res.ok) throw new Error('预览加载失败');
         return res.json();
@@ -194,9 +214,7 @@ const FilePreviewDrawer: React.FC<FilePreviewDrawerProps> = ({ isOpen, onClose, 
                 <button
                   className="p-2 hover:bg-slate-100 rounded-full text-slate-500 transition-colors"
                   title="下载"
-                  onClick={() => {
-                    if (docId) window.open(`/api/v1/knowledge/documents/${docId}/download`, '_blank');
-                  }}
+                  onClick={handleDownload}
                 >
                   <Download size={18} />
                 </button>

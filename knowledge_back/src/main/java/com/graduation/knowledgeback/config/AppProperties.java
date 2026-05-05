@@ -7,8 +7,9 @@ public record AppProperties(
         Elasticsearch elasticsearch,
         Qdrant qdrant,
         ModelService modelService,
-    Indexing indexing,
-    Llm llm
+        Indexing indexing,
+        Llm llm,
+        Auth auth
 ) {
     public record Elasticsearch(String baseUrl, String index) {
     }
@@ -23,5 +24,8 @@ public record AppProperties(
     }
 
     public record Llm(String baseUrl, String apiKey, String model) {
+    }
+
+    public record Auth(String tokenSecret, Long tokenTtlSeconds) {
     }
 }

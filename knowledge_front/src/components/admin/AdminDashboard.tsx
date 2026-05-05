@@ -3,6 +3,7 @@ import { Upload, Trash2, Cpu, Activity, FileText, CheckCircle, Database, AlertCi
 import { motion } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import ActionDialog from '../ui/ActionDialog';
+import { authFetch } from '../../utils/auth';
 
 interface SystemStatus {
   elasticsearch: string;
@@ -41,7 +42,7 @@ const QaLogsTable = () => {
     const [selectedLog, setSelectedLog] = useState<any>(null);
 
     useEffect(() => {
-        fetch('/api/v1/qa/logs')
+        authFetch('/api/v1/qa/logs')
             .then(res => res.json())
             .then(data => setLogs(data))
             .catch(err => console.error(err))
@@ -197,7 +198,7 @@ const SearchLogsTable = () => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        fetch('/api/v1/search/logs')
+        authFetch('/api/v1/search/logs')
             .then(res => res.json())
             .then(data => setLogs(data))
             .catch(err => console.error(err))
@@ -302,7 +303,7 @@ const AdminDashboard: React.FC = () => {
 
     const fetchChunkSettings = async () => {
         try {
-            const res = await fetch('/api/v1/knowledge/chunk-settings');
+            const res = await authFetch('/api/v1/knowledge/chunk-settings');
             if (!res.ok) return;
             const data = await res.json();
             setChunkSettings(data);
@@ -326,7 +327,7 @@ const AdminDashboard: React.FC = () => {
             return false;
         }
 
-        const settingsRes = await fetch('/api/v1/knowledge/chunk-settings', {
+        const settingsRes = await authFetch('/api/v1/knowledge/chunk-settings', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ chunkSize, overlap })
@@ -360,7 +361,7 @@ const AdminDashboard: React.FC = () => {
                 return;
             }
 
-            const res = await fetch('/api/v1/knowledge/upload', {
+            const res = await authFetch('/api/v1/knowledge/upload', {
                 method: 'POST',
                 body: formData
             });
@@ -404,7 +405,7 @@ const AdminDashboard: React.FC = () => {
         setLoading(true);
         setError(null);
         try {
-            const res = await fetch('/api/v1/system/status');
+            const res = await authFetch('/api/v1/system/status');
             if (!res.ok) {
                 throw new Error(`HTTP error! status: ${res.status}`);
             }
@@ -704,7 +705,7 @@ const FileGovernanceTable = () => {
     const fetchDocs = async () => {
         setLoading(true);
         try {
-            const res = await fetch('/api/v1/knowledge/documents?page=1&pageSize=100&includeHidden=true');
+            const res = await authFetch('/api/v1/knowledge/documents?page=1&pageSize=100&includeHidden=true');
             if (res.ok) {
                 const data = await res.json();
                 const sorted = data.items.sort((a: any, b: any) => {
@@ -736,7 +737,7 @@ const FileGovernanceTable = () => {
             cancelLabel: '取消',
             onConfirm: async () => {
                 try {
-                    const res = await fetch(`/api/v1/knowledge/documents/${docId}/review?action=${action}`, { method: 'POST' });
+                    const res = await authFetch(`/api/v1/knowledge/documents/${docId}/review?action=${action}`, { method: 'POST' });
                     if (res.ok) {
                         setDialog({
                             title: action === 'APPROVE' ? '审核通过' : '已拒绝',
@@ -775,7 +776,7 @@ const FileGovernanceTable = () => {
             cancelLabel: '取消',
             onConfirm: async () => {
                 try {
-                    await fetch(`/api/v1/knowledge/documents/${docId}`, { method: 'DELETE' });
+                    await authFetch(`/api/v1/knowledge/documents/${docId}`, { method: 'DELETE' });
                     fetchDocs();
                     setDialog({
                         title: '删除任务已提交',
@@ -906,7 +907,7 @@ const DocumentManagement = () => {
     const fetchDocs = async () => {
         setLoading(true);
         try {
-            const res = await fetch('/api/v1/knowledge/documents?page=1&pageSize=100&includeHidden=true');
+            const res = await authFetch('/api/v1/knowledge/documents?page=1&pageSize=100&includeHidden=true');
             if (res.ok) {
                 const data = await res.json();
                 setDocs((data.items || []).filter(isIndexedManagedDoc));
@@ -929,7 +930,7 @@ const DocumentManagement = () => {
     const saveEdit = async () => {
         if (!editDoc) return;
         try {
-            const res = await fetch(`/api/v1/knowledge/documents/${editDoc.docId}`, {
+            const res = await authFetch(`/api/v1/knowledge/documents/${editDoc.docId}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -966,7 +967,7 @@ const DocumentManagement = () => {
             cancelLabel: '取消',
             onConfirm: async () => {
                 try {
-                    await fetch(`/api/v1/knowledge/documents/${doc.docId}`, {
+                    await authFetch(`/api/v1/knowledge/documents/${doc.docId}`, {
                         method: 'PATCH',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ hidden: !doc.hidden })
@@ -1000,7 +1001,7 @@ const DocumentManagement = () => {
             cancelLabel: '取消',
             onConfirm: async () => {
                 try {
-                    await fetch(`/api/v1/knowledge/documents/${doc.docId}`, { method: 'DELETE' });
+                    await authFetch(`/api/v1/knowledge/documents/${doc.docId}`, { method: 'DELETE' });
                     setDocs(prev => prev.filter(item => item.docId !== doc.docId));
                     setDialog({
                         title: '删除任务已提交',

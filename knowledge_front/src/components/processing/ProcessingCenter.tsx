@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   X,
 } from 'lucide-react';
+import { authFetch } from '../../utils/auth';
 
 type DocStatus =
   | 'UPLOADED'
@@ -183,7 +184,7 @@ const ProcessingCenter = ({ focusDocId, onConsumeFocus }: ProcessingCenterProps)
 
   const fetchDocs = async () => {
     try {
-      const res = await fetch('/api/v1/knowledge/documents?page=1&pageSize=100&includeHidden=true');
+      const res = await authFetch('/api/v1/knowledge/documents?page=1&pageSize=100&includeHidden=true');
       if (!res.ok) return;
       const data = await res.json();
       const items = ((data.items || []) as DocumentItem[]).sort(
@@ -199,7 +200,7 @@ const ProcessingCenter = ({ focusDocId, onConsumeFocus }: ProcessingCenterProps)
   const fetchDetail = async (docId: string) => {
     setLoadingDetail(true);
     try {
-      const res = await fetch(`/api/v1/knowledge/documents/${docId}/processing`);
+      const res = await authFetch(`/api/v1/knowledge/documents/${docId}/processing`);
       if (!res.ok) return;
       const data = await res.json();
       setProcessing(data);
@@ -211,7 +212,7 @@ const ProcessingCenter = ({ focusDocId, onConsumeFocus }: ProcessingCenterProps)
   const fetchChunkPreview = async (docId: string) => {
     setLoadingPreview(true);
     try {
-      const res = await fetch(`/api/v1/knowledge/documents/${docId}/chunk-preview`);
+      const res = await authFetch(`/api/v1/knowledge/documents/${docId}/chunk-preview`);
       if (!res.ok) return;
       const data = await res.json();
       setChunkPreview(data);
